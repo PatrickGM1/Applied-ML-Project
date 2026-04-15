@@ -8,3 +8,6 @@
 
 ## Project ideea:
     We don't know yet lol :)
+
+## Website for deployment:
+https://aml.guba.dev/ 
