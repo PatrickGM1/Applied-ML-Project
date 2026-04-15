@@ -19,13 +19,13 @@ jobs:
             if [ ! -d "/var/www/html/aml_html/.git" ]; then
               cd /var/www/html/aml_html
               git init
-              git remote add origin https://github.com/PatrickGM1/aml-guba-dev.git
+              git remote add origin https://github.com/PatrickGM1/Applied-ML-Project.git
             fi
 
             git config --global --add safe.directory /var/www/html/aml_html
 
             cd /var/www/html/aml_html
-            git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/PatrickGM1/aml-guba-dev.git
+            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/PatrickGM1/Applied-ML-Project.git
             git fetch --all
             git reset --hard origin/main
 
