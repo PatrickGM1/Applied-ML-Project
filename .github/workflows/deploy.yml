@@ -22,6 +22,8 @@ jobs:
               git remote add origin https://github.com/PatrickGM1/aml-guba-dev.git
             fi
 
+            git config --global --add safe.directory /var/www/html/aml_html
+
             cd /var/www/html/aml_html
             git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/PatrickGM1/aml-guba-dev.git
             git fetch --all
