@@ -1,0 +1,31 @@
+name: Deploy aml.guba.dev
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            mkdir -p /var/www/html/aml_html
+
+            if [ ! -d "/var/www/html/aml_html/.git" ]; then
+              cd /var/www/html/aml_html
+              git init
+              git remote add origin https://github.com/PatrickGM1/aml-guba-dev.git
+            fi
+
+            cd /var/www/html/aml_html
+            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/PatrickGM1/aml-guba-dev.git
+            git fetch --all
+            git reset --hard origin/main
+
+            chown -R www-data:www-data /var/www/html/aml_html
+            chmod -R 755 /var/www/html/aml_html
