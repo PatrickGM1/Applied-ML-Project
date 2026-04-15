@@ -23,7 +23,7 @@ jobs:
             fi
 
             cd /var/www/html/aml_html
-            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/PatrickGM1/aml-guba-dev.git
+            git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/PatrickGM1/aml-guba-dev.git
             git fetch --all
             git reset --hard origin/main
 
