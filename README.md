@@ -6,8 +6,9 @@
     - Ana-Maria Izbas
     - George Tutui
 
-## Project ideea:
-    We don't know yet lol :)
+## Project idea:
+    Fake News Detection using the LIAR dataset.
+    Dataset: https://www.kaggle.com/datasets/doanquanvietnamca/liar-dataset
 
 ## Website for deployment:
 https://aml.guba.dev/ 
