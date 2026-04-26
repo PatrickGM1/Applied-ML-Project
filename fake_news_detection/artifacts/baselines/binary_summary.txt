@@ -1,0 +1,10 @@
+dataset: binary
+label_column: label2_int
+train_rows: 6489
+valid_rows: 799
+accuracy: 0.6708
+f1_macro: 0.6619
+labels: 0, 1
+
+confusion_matrix:
+[[203, 176], [87, 333]]
