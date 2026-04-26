@@ -118,8 +118,10 @@ def main():
     }
 
     for name, metrics in results.items():
-        print(f"{name} f1_macro: {metrics['f1_macro']:.4f}")
-        print(f"{name} accuracy: {metrics['accuracy']:.4f}")
+        print(
+            f"{name}: accuracy={metrics['accuracy']:.4f}, "
+            f"f1_macro={metrics['f1_macro']:.4f}"
+        )
 
 
 if __name__ == '__main__':

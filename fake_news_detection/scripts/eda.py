@@ -30,6 +30,12 @@ def load_binary_train():
     return pd.read_csv(LABELED_DIR / 'train_binary.processed.csv')
 
 
+def save_figure(file_name):
+    plt.tight_layout()
+    plt.savefig(EDA_DIR / file_name, dpi=150)
+    plt.close()
+
+
 def plot_label_distribution(frame):
     counts = (
         frame['label']
@@ -60,10 +66,7 @@ def plot_label_distribution(frame):
     for i, v in enumerate(binary_counts.values):
         axes[1].text(i, v + 10, str(v), ha='center', fontsize=9)
 
-    plt.tight_layout()
-    plt.savefig(EDA_DIR / 'label_distribution.png', dpi=150)
-    plt.close()
-    print('Saved: label_distribution.png')
+    save_figure('label_distribution.png')
 
 
 def plot_missing_values(frame):
@@ -71,7 +74,6 @@ def plot_missing_values(frame):
     missing = missing[missing > 0].sort_values(ascending=False)
 
     if missing.empty:
-        print('No missing values found.')
         return
 
     fig, ax = plt.subplots(figsize=(10, 5))
@@ -81,10 +83,7 @@ def plot_missing_values(frame):
     for i, v in enumerate(missing.values):
         ax.text(v + 5, i, str(v), va='center', fontsize=9)
 
-    plt.tight_layout()
-    plt.savefig(EDA_DIR / 'missing_values.png', dpi=150)
-    plt.close()
-    print('Saved: missing_values.png')
+    save_figure('missing_values.png')
 
 
 def plot_text_length_distribution(frame):
@@ -100,10 +99,7 @@ def plot_text_length_distribution(frame):
     ax.set_xlabel('Word count')
     ax.set_ylabel('Frequency')
     ax.legend()
-    plt.tight_layout()
-    plt.savefig(EDA_DIR / 'text_length_distribution.png', dpi=150)
-    plt.close()
-    print('Saved: text_length_distribution.png')
+    save_figure('text_length_distribution.png')
 
 
 def plot_fake_rate_by_party(frame):
@@ -127,10 +123,7 @@ def plot_fake_rate_by_party(frame):
     ax.axhline(0.5, linestyle='--', color='black', linewidth=0.8, label='50% line')
     ax.legend()
     ax.tick_params(axis='x', rotation=30)
-    plt.tight_layout()
-    plt.savefig(EDA_DIR / 'fake_rate_by_party.png', dpi=150)
-    plt.close()
-    print('Saved: fake_rate_by_party.png')
+    save_figure('fake_rate_by_party.png')
 
 
 def plot_history_counts(frame):
@@ -150,25 +143,31 @@ def plot_history_counts(frame):
         ax.legend(fontsize=7)
 
     fig.suptitle('Speaker History Counts: Fake vs Real (train binary subset)', y=1.02)
-    plt.tight_layout()
     plt.savefig(EDA_DIR / 'history_counts.png', dpi=150, bbox_inches='tight')
     plt.close()
-    print('Saved: history_counts.png')
 
 
-def print_summary(frame):
-    print(f'\n=== Dataset Summary (train) ===')
-    print(f'Rows: {len(frame)}')
-    print(f'\nLabel counts:')
-    print(frame['label'].value_counts().to_string())
-    print(f'\nBinary label counts (mapped subset):')
-    print(frame['label_binary'].value_counts(dropna=False).to_string())
-    print(f'\nMissing values:')
+def summary_lines(frame):
     missing = frame.isnull().sum()
-    print(missing[missing > 0].to_string())
-    print(f'\nStatement word count stats:')
     word_counts = frame['statement'].dropna().apply(lambda t: len(str(t).split()))
-    print(word_counts.describe().to_string())
+
+    lines = [
+        'Dataset summary (train)',
+        f'rows: {len(frame)}',
+        '',
+        'label counts:',
+        frame['label'].value_counts().to_string(),
+        '',
+        'binary label counts:',
+        frame['label_binary'].value_counts(dropna=False).to_string(),
+        '',
+        'missing values:',
+        missing[missing > 0].to_string(),
+        '',
+        'statement word count stats:',
+        word_counts.describe().to_string(),
+    ]
+    return lines
 
 
 def main():
@@ -177,7 +176,9 @@ def main():
     frame = load_train()
     binary_frame = load_binary_train()
 
-    print_summary(frame)
+    summary_path = EDA_DIR / 'summary.txt'
+    with open(summary_path, 'w', encoding='utf-8') as file_handle:
+        file_handle.write('\n'.join(summary_lines(frame)))
 
     plot_label_distribution(frame)
     plot_missing_values(frame)
@@ -185,7 +186,7 @@ def main():
     plot_fake_rate_by_party(frame)
     plot_history_counts(binary_frame)
 
-    print(f'\nAll plots saved to: {EDA_DIR}')
+    print(f'EDA done. Plots and summary saved in: {EDA_DIR}')
 
 
 if __name__ == '__main__':
