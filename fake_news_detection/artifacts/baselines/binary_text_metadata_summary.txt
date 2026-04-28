@@ -1,0 +1,10 @@
+dataset: binary_text_metadata
+label_column: label2_int
+train_rows: 6489
+valid_rows: 799
+accuracy: 0.6796
+f1_macro: 0.6728
+labels: 0, 1
+
+confusion_matrix:
+[[214, 165], [91, 329]]

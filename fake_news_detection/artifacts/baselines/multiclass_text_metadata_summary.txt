@@ -1,0 +1,10 @@
+dataset: multiclass_text_metadata
+label_column: label6_int
+train_rows: 10269
+valid_rows: 1284
+accuracy: 0.3131
+f1_macro: 0.3119
+labels: 0, 1, 2, 3, 4, 5
+
+confusion_matrix:
+[[59, 49, 70, 31, 8, 20], [37, 98, 51, 33, 17, 27], [32, 45, 78, 48, 5, 40], [25, 37, 53, 92, 6, 38], [21, 35, 11, 6, 32, 11], [10, 27, 43, 44, 2, 43]]

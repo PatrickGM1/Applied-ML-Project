@@ -1,4 +1,5 @@
 pandas
 scikit-learn
+scipy
 nltk
-matplotlibpython -m fake_news_detection.scripts.eda
+matplotlib
