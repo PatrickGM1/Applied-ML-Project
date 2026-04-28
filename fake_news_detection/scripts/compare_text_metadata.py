@@ -14,7 +14,7 @@ from fake_news_detection.features.metadata import fit_metadata_transformers, tra
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
 CLEANED_TEXT_DIR = PROJECT_DIR / 'data' / 'processed' / 'cleaned_text'
-OUTPUT_DIR = PROJECT_DIR / 'artifacts' / 'baselines'
+OUTPUT_DIR = PROJECT_DIR / 'artifacts' / 'comparisons'
 TEXT_COLUMN = 'statement_clean'
 
 EXPERIMENTS = {

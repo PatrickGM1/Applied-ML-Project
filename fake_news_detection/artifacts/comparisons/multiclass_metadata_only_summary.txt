@@ -1,0 +1,10 @@
+dataset: multiclass_metadata_only
+label_column: label6_int
+train_rows: 10269
+valid_rows: 1284
+accuracy: 0.2866
+f1_macro: 0.2869
+labels: 0, 1, 2, 3, 4, 5
+
+confusion_matrix:
+[[47, 57, 66, 41, 8, 18], [32, 83, 58, 43, 13, 34], [25, 41, 89, 51, 3, 39], [21, 44, 60, 81, 2, 43], [17, 29, 18, 10, 30, 12], [12, 30, 47, 40, 2, 38]]

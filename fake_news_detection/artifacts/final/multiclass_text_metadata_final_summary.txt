@@ -1,0 +1,11 @@
+dataset: multiclass_text_metadata_final
+label_column: label6_int
+train_rows: 11553
+test_rows: 1283
+accuracy: 0.2744
+f1_macro: 0.2668
+labels: 0, 1, 2, 3, 4, 5
+unknown_subjects: nightlife, politifacts-top-promises
+
+confusion_matrix:
+[[35, 43, 57, 45, 9, 25], [33, 93, 46, 33, 13, 32], [36, 47, 72, 64, 4, 44], [32, 35, 52, 82, 1, 47], [13, 25, 17, 11, 18, 8], [18, 39, 41, 57, 4, 52]]
