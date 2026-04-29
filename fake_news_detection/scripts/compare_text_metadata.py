@@ -10,6 +10,12 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from fake_news_detection.features.metadata import fit_metadata_transformers, transform_metadata
 
 #  runs and compares text-only vs metadata-only vs combined.
+# Trains 3 models per task:
+# *_text_only (TF‑IDF only)
+# *_metadata_only (metadata only)
+# *_text_metadata (TF‑IDF + metadata)
+# Saves metrics to fake_news_detection/artifacts/baselines/*_metrics.json and summaries to *_summary.txt.
+# Prints accuracy and macro-F1 for each run.
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
