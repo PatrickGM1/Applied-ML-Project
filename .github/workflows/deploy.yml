@@ -23,6 +23,7 @@ jobs:
               apt-get install -y -qq docker.io docker-compose-plugin
               systemctl enable docker
               systemctl start docker
+              hash -r
             fi
 
             mkdir -p $APP_DIR
