@@ -13,8 +13,17 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GITHUB_REF_NAME,GITHUB_TOKEN
           script: |
             APP_DIR=/var/www/html/aml_html
+
+            # Install Docker if not present
+            if ! command -v docker &> /dev/null; then
+              apt-get update -qq
+              apt-get install -y -qq docker.io docker-compose-plugin
+              systemctl enable docker
+              systemctl start docker
+            fi
 
             mkdir -p $APP_DIR
 
@@ -27,9 +36,9 @@ jobs:
             git config --global --add safe.directory $APP_DIR
 
             cd $APP_DIR
-            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/PatrickGM1/Applied-ML-Project.git
+            git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/PatrickGM1/Applied-ML-Project.git
             git fetch --all
-            git reset --hard origin/main
+            git reset --hard origin/${GITHUB_REF_NAME}
 
             docker compose -f $APP_DIR/docker-compose.yml down --remove-orphans
             docker compose -f $APP_DIR/docker-compose.yml build --no-cache
