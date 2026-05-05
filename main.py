@@ -1,8 +1,11 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
 
-app = FastAPI(title="Fake News Detection API")
+app = FastAPI(
+    title="Fake News Detection API",
+    version="1.0.0",
+    openapi_tags=[{"name": "test", "description": "Health check endpoint"}],
+)
 
-@app.get("/health")
+@app.get("/health", tags=["test"])
 def health():
     return {"status": "ok, api is running"}
