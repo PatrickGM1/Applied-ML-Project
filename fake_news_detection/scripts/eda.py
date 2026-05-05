@@ -1,12 +1,16 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.manifold import TSNE
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
 LABELED_DIR = PROJECT_DIR / 'data' / 'processed' / 'labeled'
+CLEANED_DIR = PROJECT_DIR / 'data' / 'processed' / 'cleaned_text'
 EDA_DIR = PROJECT_DIR / 'artifacts' / 'eda'
 
 LABEL_ORDER = ['pants-fire', 'false', 'barely-true', 'half-true', 'mostly-true', 'true']
@@ -126,6 +130,42 @@ def plot_fake_rate_by_party(frame):
     save_figure('fake_rate_by_party.png')
 
 
+def plot_tsne(frame, sample_size=2000, random_state=42):
+    """t-SNE projection of TF-IDF text embeddings coloured by 6-class label."""
+    rng = np.random.default_rng(random_state)
+    idx = rng.choice(len(frame), size=min(sample_size, len(frame)), replace=False)
+    sample = frame.iloc[idx].copy()
+
+    text_col = 'statement_clean' if 'statement_clean' in sample.columns else 'statement'
+    texts = sample[text_col].fillna('').tolist()
+
+    vectorizer = TfidfVectorizer(max_features=500, sublinear_tf=True)
+    tfidf_matrix = vectorizer.fit_transform(texts).toarray()
+
+    tsne = TSNE(n_components=2, perplexity=30, random_state=random_state, max_iter=1000)
+    coords = tsne.fit_transform(tfidf_matrix)
+
+    palette = sns.color_palette('tab10', len(LABEL_ORDER))
+    label_to_color = {label: palette[i] for i, label in enumerate(LABEL_ORDER)}
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+    for label in LABEL_ORDER:
+        mask = sample['label'] == label
+        ax.scatter(
+            coords[mask, 0],
+            coords[mask, 1],
+            c=[label_to_color[label]],
+            label=label,
+            alpha=0.6,
+            s=15,
+        )
+    ax.set_title(f't-SNE of TF-IDF Text Embeddings (n={len(sample)}, train)')
+    ax.set_xlabel('t-SNE dimension 1')
+    ax.set_ylabel('t-SNE dimension 2')
+    ax.legend(title='Label', bbox_to_anchor=(1.01, 1), loc='upper left', fontsize=9)
+    save_figure('tsne_text_embeddings.png')
+
+
 def plot_history_counts(frame):
     frame = frame.copy()
     for col in HIST_COLUMNS:
@@ -176,6 +216,10 @@ def main():
     frame = load_train()
     binary_frame = load_binary_train()
 
+    # Load cleaned text version if available (has statement_clean column)
+    cleaned_path = CLEANED_DIR / 'train.processed.csv'
+    tsne_frame = pd.read_csv(cleaned_path) if cleaned_path.exists() else frame
+
     summary_path = EDA_DIR / 'summary.txt'
     with open(summary_path, 'w', encoding='utf-8') as file_handle:
         file_handle.write('\n'.join(summary_lines(frame)))
@@ -185,6 +229,7 @@ def main():
     plot_text_length_distribution(frame)
     plot_fake_rate_by_party(frame)
     plot_history_counts(binary_frame)
+    plot_tsne(tsne_frame)
 
     print(f'EDA done. Plots and summary saved in: {EDA_DIR}')
 
