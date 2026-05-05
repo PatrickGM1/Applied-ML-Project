@@ -1,7 +1,7 @@
 name: Deploy aml.guba.dev
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   deploy:
@@ -14,20 +14,23 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            mkdir -p /var/www/html/aml_html
+            APP_DIR=/var/www/html/aml_html
 
-            if [ ! -d "/var/www/html/aml_html/.git" ]; then
-              cd /var/www/html/aml_html
+            mkdir -p $APP_DIR
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              cd $APP_DIR
               git init
               git remote add origin https://github.com/PatrickGM1/Applied-ML-Project.git
             fi
 
-            git config --global --add safe.directory /var/www/html/aml_html
+            git config --global --add safe.directory $APP_DIR
 
-            cd /var/www/html/aml_html
+            cd $APP_DIR
             git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/PatrickGM1/Applied-ML-Project.git
             git fetch --all
             git reset --hard origin/main
 
-            chown -R www-data:www-data /var/www/html/aml_html
-            chmod -R 755 /var/www/html/aml_html
+            docker compose -f $APP_DIR/docker-compose.yml down --remove-orphans
+            docker compose -f $APP_DIR/docker-compose.yml build --no-cache
+            docker compose -f $APP_DIR/docker-compose.yml up -d

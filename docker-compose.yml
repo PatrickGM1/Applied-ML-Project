@@ -1,0 +1,7 @@
+services:
+  api:
+    build: .
+    container_name: fake_news_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"

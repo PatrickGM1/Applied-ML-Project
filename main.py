@@ -1,8 +1,19 @@
-# This is a sample Python script.
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-def hello_world():
-    return "Hello, World!"
+app = FastAPI(title="Fake News Detection API")
 
 
-if __name__ == '__main__':
-    hello_world()
+class PredictRequest(BaseModel):
+    text: str
+
+
+class PredictResponse(BaseModel):
+    label: str
+    confidence: float | None = None
+    message: str
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
