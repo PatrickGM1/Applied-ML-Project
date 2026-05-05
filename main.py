@@ -5,4 +5,4 @@ app = FastAPI(title="Fake News Detection API")
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok, api is running"}
