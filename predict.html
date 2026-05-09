@@ -23,16 +23,7 @@
             >dev</a
           >
         </div>
-        <p>Base Model — TF-IDF + Logistic Regression</p>
-        <p class="hero-sub">
-          Binary fake/real classifier trained on the
-          <a
-            href="https://www.kaggle.com/datasets/doanquanvietnamca/liar-dataset"
-            target="_blank"
-            rel="noopener noreferrer"
-            >LIAR Dataset</a
-          >
-        </p>
+        <p>Base Model</p>
       </div>
 
       <section>
@@ -161,6 +152,11 @@
       const result = document.getElementById("predict-result");
       const button = document.getElementById("predict-btn");
 
+      function getAppBasePath() {
+        const path = window.location.pathname;
+        return path === "/demo" || path.startsWith("/demo/") ? "/demo" : "";
+      }
+
       function getApiBaseUrl() {
         const configured = window.localStorage.getItem("API_BASE_URL");
         if (configured && configured.trim()) {
@@ -169,7 +165,7 @@
         if (window.location.protocol === "file:") {
           return "http://127.0.0.1:8000";
         }
-        return window.location.origin.replace(/\/$/, "");
+        return `${window.location.origin.replace(/\/$/, "")}${getAppBasePath()}`;
       }
 
       const API_BASE_URL = getApiBaseUrl();

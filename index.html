@@ -112,7 +112,7 @@
 
       function getAppBasePath() {
         const path = window.location.pathname;
-        return path.startsWith("/demo/") ? "/demo" : "";
+        return path === "/demo" || path.startsWith("/demo/") ? "/demo" : "";
       }
 
       function getApiBaseUrl() {
