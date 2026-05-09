@@ -86,7 +86,7 @@
       <section>
         <span class="section-label">Demo</span>
         <div class="links">
-          <a href="/demo" rel="noopener noreferrer">
+          <a id="demo-link" href="/demo" rel="noopener noreferrer">
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -108,6 +108,12 @@
     <script>
       const healthLink = document.getElementById("health-link");
       const docsLink = document.getElementById("docs-link");
+      const demoLink = document.getElementById("demo-link");
+
+      function getAppBasePath() {
+        const path = window.location.pathname;
+        return path.startsWith("/demo/") ? "/demo" : "";
+      }
 
       function getApiBaseUrl() {
         const configured = window.localStorage.getItem("API_BASE_URL");
@@ -117,12 +123,14 @@
         if (window.location.protocol === "file:") {
           return "http://127.0.0.1:8000";
         }
-        return window.location.origin.replace(/\/$/, "");
+        return `${window.location.origin.replace(/\/$/, "")}${getAppBasePath()}`;
       }
 
       const API_BASE_URL = getApiBaseUrl();
+      const APP_BASE_PATH = getAppBasePath();
       healthLink.href = `${API_BASE_URL}/health`;
       docsLink.href = `${API_BASE_URL}/docs`;
+      demoLink.href = APP_BASE_PATH ? `${APP_BASE_PATH}/demo` : "/demo";
     </script>
   </body>
 </html>
