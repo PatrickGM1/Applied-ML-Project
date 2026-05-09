@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import joblib
 import pandas as pd
 from scipy.sparse import hstack
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -9,12 +10,11 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 
 from fake_news_detection.features.metadata import fit_metadata_transformers, transform_metadata
 
-# Final evaluation: train on train+valid, test once on test.
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
 CLEANED_TEXT_DIR = PROJECT_DIR / "data" / "processed" / "cleaned_text"
 OUTPUT_DIR = PROJECT_DIR / "artifacts" / "final"
+MODEL_DIR = PROJECT_DIR / "artifacts" / "models"
 TEXT_COLUMN = "statement_clean"
 SUBJECTS_COLUMN = "subjects"
 
@@ -118,6 +118,24 @@ def save_results(
         file_handle.write("\n".join(summary_lines))
 
 
+def save_model_bundle(
+    name: str,
+    vectorizer: TfidfVectorizer,
+    transformers,
+    classifier: LogisticRegression,
+    label_column: str,
+) -> None:
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    model_path = MODEL_DIR / f"{name}.joblib"
+    bundle = {
+        "vectorizer": vectorizer,
+        "transformers": transformers,
+        "classifier": classifier,
+        "label_column": label_column,
+    }
+    joblib.dump(bundle, model_path)
+
+
 def evaluate_text_metadata(name: str, train_df: pd.DataFrame, test_df: pd.DataFrame, label_column: str) -> dict:
     vectorizer = build_vectorizer()
     x_train_text = vectorizer.fit_transform(train_df[TEXT_COLUMN].fillna(""))
@@ -132,6 +150,8 @@ def evaluate_text_metadata(name: str, train_df: pd.DataFrame, test_df: pd.DataFr
     classifier = build_classifier()
     classifier.fit(x_train, train_df[label_column])
     predictions = classifier.predict(x_test)
+
+    save_model_bundle(name, vectorizer, transformers, classifier, label_column)
 
     metrics = compute_metrics(name, test_df[label_column], predictions)
     # Logs info useful for report for unknown classes

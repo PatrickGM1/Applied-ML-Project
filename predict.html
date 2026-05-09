@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Test Base Model — aml.guba.dev</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="hero">
+        <div class="hero-domain">
+          <a href="/"
+            >aml<span class="hero-slash">.</span>guba<span class="hero-slash"
+              >.</span
+            >dev</a
+          >
+        </div>
+        <p>Base Model — TF-IDF + Logistic Regression</p>
+        <p class="hero-sub">
+          Binary fake/real classifier trained on the
+          <a
+            href="https://www.kaggle.com/datasets/doanquanvietnamca/liar-dataset"
+            target="_blank"
+            rel="noopener noreferrer"
+            >LIAR Dataset</a
+          >
+        </p>
+      </div>
+
+      <section>
+        <span class="section-label">Try Prediction</span>
+        <form id="predict-form" class="predict-form">
+          <label for="statement">Claim text</label>
+          <textarea
+            id="statement"
+            name="statement"
+            rows="4"
+            placeholder="Enter a political claim"
+            required
+          ></textarea>
+
+          <div class="grid-2">
+            <div>
+              <label for="subjects">Subjects (comma-separated)</label>
+              <input
+                id="subjects"
+                name="subjects"
+                type="text"
+                placeholder="economy,budget"
+              />
+            </div>
+            <div>
+              <label for="party">Party</label>
+              <input
+                id="party"
+                name="party"
+                type="text"
+                placeholder="republican"
+              />
+            </div>
+            <div>
+              <label for="state">State</label>
+              <input id="state" name="state" type="text" placeholder="texas" />
+            </div>
+            <div>
+              <label for="speaker_job">Speaker job</label>
+              <input
+                id="speaker_job"
+                name="speaker_job"
+                type="text"
+                placeholder="senator"
+              />
+            </div>
+          </div>
+
+          <details>
+            <summary>
+              Speaker history (optional) — how many times has this speaker been
+              rated each label?
+            </summary>
+            <div class="grid-5">
+              <div>
+                <label for="hist1">Barely true</label>
+                <input
+                  id="hist1"
+                  name="hist1"
+                  type="number"
+                  value="0"
+                  min="0"
+                  step="1"
+                />
+              </div>
+              <div>
+                <label for="hist2">False</label>
+                <input
+                  id="hist2"
+                  name="hist2"
+                  type="number"
+                  value="0"
+                  min="0"
+                  step="1"
+                />
+              </div>
+              <div>
+                <label for="hist3">Half true</label>
+                <input
+                  id="hist3"
+                  name="hist3"
+                  type="number"
+                  value="0"
+                  min="0"
+                  step="1"
+                />
+              </div>
+              <div>
+                <label for="hist4">Mostly true</label>
+                <input
+                  id="hist4"
+                  name="hist4"
+                  type="number"
+                  value="0"
+                  min="0"
+                  step="1"
+                />
+              </div>
+              <div>
+                <label for="hist5">Pants on fire</label>
+                <input
+                  id="hist5"
+                  name="hist5"
+                  type="number"
+                  value="0"
+                  min="0"
+                  step="1"
+                />
+              </div>
+            </div>
+          </details>
+
+          <button id="predict-btn" type="submit">Predict</button>
+        </form>
+
+        <div id="predict-result" class="result" aria-live="polite">
+          <p class="muted">Submit a claim to see model output.</p>
+        </div>
+      </section>
+
+      <footer>© 2026 <a href="https://guba.dev">guba.dev</a></footer>
+    </div>
+
+    <script>
+      const form = document.getElementById("predict-form");
+      const result = document.getElementById("predict-result");
+      const button = document.getElementById("predict-btn");
+
+      function getApiBaseUrl() {
+        const configured = window.localStorage.getItem("API_BASE_URL");
+        if (configured && configured.trim()) {
+          return configured.trim().replace(/\/$/, "");
+        }
+        if (window.location.protocol === "file:") {
+          return "http://127.0.0.1:8000";
+        }
+        return window.location.origin.replace(/\/$/, "");
+      }
+
+      const API_BASE_URL = getApiBaseUrl();
+
+      function normalizeString(value) {
+        return value && value.trim() ? value.trim() : "missing";
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const payload = {
+          statement: form.statement.value.trim(),
+          subjects: form.subjects.value.trim(),
+          party: normalizeString(form.party.value),
+          state: normalizeString(form.state.value),
+          speaker_job: normalizeString(form.speaker_job.value),
+          hist1: Number(form.hist1.value || 0),
+          hist2: Number(form.hist2.value || 0),
+          hist3: Number(form.hist3.value || 0),
+          hist4: Number(form.hist4.value || 0),
+          hist5: Number(form.hist5.value || 0),
+        };
+
+        if (!payload.statement) {
+          result.innerHTML = '<p class="error">Claim text is required.</p>';
+          return;
+        }
+
+        button.disabled = true;
+        button.textContent = "Predicting...";
+        result.innerHTML = '<p class="muted">Running inference...</p>';
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/predict`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            const message = data.detail || "Prediction failed";
+            result.innerHTML = `<p class="error">${message}</p>`;
+            return;
+          }
+
+          const probabilities = Object.entries(data.class_probabilities || {})
+            .sort((a, b) => b[1] - a[1])
+            .map(([label, value]) => {
+              const percent = (value * 100).toFixed(2);
+              return `<li><span>${label}</span><span>${percent}%</span></li>`;
+            })
+            .join("");
+
+          const confidenceText = data.confidence
+            ? `${(data.confidence * 100).toFixed(2)}%`
+            : "n/a";
+          const lowConfidenceBanner = data.is_low_confidence
+            ? '<p class="warn">Low confidence result. Treat this as a weak signal, not a verdict.</p>'
+            : "";
+
+          result.innerHTML = `
+            <p><strong>Prediction:</strong> ${data.predicted_label}</p>
+            <p class="muted">Confidence: ${confidenceText}</p>
+            ${lowConfidenceBanner}
+            <ul>${probabilities}</ul>
+          `;
+        } catch (error) {
+          result.innerHTML = `
+            <p class="error">Could not reach API at ${API_BASE_URL}.</p>
+            <p class="muted">If frontend and backend run on different hosts/ports, set localStorage("API_BASE_URL") and reload.</p>
+          `;
+        } finally {
+          button.disabled = false;
+          button.textContent = "Predict";
+        }
+      });
+    </script>
+  </body>
+</html>

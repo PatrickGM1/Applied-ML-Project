@@ -18,11 +18,11 @@ BINARY_ORDER = ['fake', 'real']
 
 HIST_COLUMNS = ['hist1', 'hist2', 'hist3', 'hist4', 'hist5']
 HIST_LABELS = [
-    'Pants-fire count',
-    'False count',
     'Barely-true count',
+    'False count',
     'Half-true count',
     'Mostly-true count',
+    'Pants-on-fire count',
 ]
 
 

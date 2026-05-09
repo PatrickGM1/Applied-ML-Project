@@ -119,6 +119,106 @@ section {
   font-weight: 600;
 }
 
+.predict-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.predict-form label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.predict-form textarea,
+.predict-form input,
+.predict-form button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-family: inherit;
+}
+
+.predict-form textarea,
+.predict-form input {
+  width: 100%;
+}
+
+.predict-form button {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.predict-form button:hover:enabled {
+  border-color: var(--border-hover);
+  background: var(--accent-dim);
+}
+
+.predict-form button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.grid-5 {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.result {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.result ul {
+  list-style: none;
+  margin-top: 10px;
+}
+
+.result li {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 0.9rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: #ff7575;
+}
+
+.warn {
+  color: #f0c05a;
+  margin-top: 8px;
+}
+
+details {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 /* Cards */
 .projects {
   display: flex;
@@ -205,4 +305,14 @@ footer {
   color: var(--muted);
   font-size: 0.72rem;
   letter-spacing: 0.02em;
+}
+
+@media (max-width: 700px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

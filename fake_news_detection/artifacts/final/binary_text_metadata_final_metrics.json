@@ -2,19 +2,10 @@
   "dataset": "binary_text_metadata_final",
   "accuracy": 0.6870324189526185,
   "f1_macro": 0.6738902577909971,
-  "labels": [
-    "0",
-    "1"
-  ],
+  "labels": ["0", "1"],
   "confusion_matrix": [
-    [
-      195,
-      147
-    ],
-    [
-      104,
-      356
-    ]
+    [195, 147],
+    [104, 356]
   ],
   "classification_report": {
     "0": {
@@ -46,8 +37,5 @@
   "train_rows": 7288,
   "test_rows": 802,
   "label_column": "label2_int",
-  "unknown_subjects": [
-    "nightlife",
-    "politifacts-top-promises"
-  ]
+  "unknown_subjects": ["nightlife", "politifacts-top-promises"]
 }

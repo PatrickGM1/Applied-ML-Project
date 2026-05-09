@@ -38,7 +38,12 @@
       <section>
         <span class="section-label">API</span>
         <div class="links">
-          <a href="/health" target="_blank" rel="noopener noreferrer">
+          <a
+            id="health-link"
+            href="/health"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -52,7 +57,12 @@
             </svg>
             Test endpoint
           </a>
-          <a href="/docs" target="_blank" rel="noopener noreferrer">
+          <a
+            id="docs-link"
+            href="/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -73,7 +83,46 @@
         </div>
       </section>
 
+      <section>
+        <span class="section-label">Demo</span>
+        <div class="links">
+          <a href="/demo" rel="noopener noreferrer">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Test base model
+          </a>
+        </div>
+      </section>
+
       <footer>© 2026 <a href="https://guba.dev">guba.dev</a></footer>
     </div>
+
+    <script>
+      const healthLink = document.getElementById("health-link");
+      const docsLink = document.getElementById("docs-link");
+
+      function getApiBaseUrl() {
+        const configured = window.localStorage.getItem("API_BASE_URL");
+        if (configured && configured.trim()) {
+          return configured.trim().replace(/\/$/, "");
+        }
+        if (window.location.protocol === "file:") {
+          return "http://127.0.0.1:8000";
+        }
+        return window.location.origin.replace(/\/$/, "");
+      }
+
+      const API_BASE_URL = getApiBaseUrl();
+      healthLink.href = `${API_BASE_URL}/health`;
+      docsLink.href = `${API_BASE_URL}/docs`;
+    </script>
   </body>
 </html>
