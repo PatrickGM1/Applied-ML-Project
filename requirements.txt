@@ -8,3 +8,6 @@ fastapi
 uvicorn[standard]
 pydantic
 httpx
+transformers
+accelerate
+torch
