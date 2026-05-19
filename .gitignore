@@ -5,3 +5,17 @@ __pycache__/
 venv/
 .env
 .venv/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# OS
+Thumbs.db
