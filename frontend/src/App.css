@@ -87,8 +87,59 @@ section {
   color: var(--muted);
   font-weight: 600;
 }
+/* ── Hero sub-line ─────────────────────────────── */
 
-/* ── Form ──────────────────────────────────────── */
+.hero-sub {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.hero-sub a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.hero-sub a:hover {
+  text-decoration: underline;
+}
+
+/* ── Link buttons (homepage) ───────────────────── */
+
+.links {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.link-btn:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  background: var(--accent-dim);
+}
+
+.link-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+/* ── Section ───────────────────────────────────── */
 
 .predict-form {
   display: flex;
