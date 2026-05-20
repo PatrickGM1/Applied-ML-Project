@@ -5,3 +5,8 @@ __pycache__/
 venv/
 .env
 .venv/
+
+# Large training artifacts / model weights
+fake_news_detection/artifacts/models/bert_text_only/
+fake_news_detection/artifacts/final/_tmp/
+*.safetensors

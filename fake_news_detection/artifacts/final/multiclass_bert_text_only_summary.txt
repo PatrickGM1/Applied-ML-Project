@@ -1,0 +1,15 @@
+dataset: multiclass_bert_text_only
+model_name: bert-base-uncased
+text_column: statement
+label_column: label6_int
+num_labels: 6
+max_length: 128
+train_rows: 11553
+eval_rows: 1283
+accuracy: 0.2954
+f1_macro: 0.2902
+f1_weighted: 0.2927
+labels: 0, 1, 2, 3, 4, 5
+
+confusion_matrix:
+[[41, 48, 71, 31, 8, 15], [18, 102, 59, 37, 8, 26], [26, 62, 86, 57, 4, 32], [21, 38, 85, 67, 1, 37], [14, 33, 15, 9, 18, 3], [8, 35, 45, 55, 3, 65]]
