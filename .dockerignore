@@ -1,0 +1,17 @@
+fake_news_detection/artifacts/models/
+fake_news_detection/artifacts/encoders/
+fake_news_detection/data/raw/
+fake_news_detection/data/processed/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.git/
+.idea/
+*.egg-info/
+node_modules/
+frontend/
+*.md
+tests/
