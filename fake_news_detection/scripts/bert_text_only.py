@@ -1,16 +1,25 @@
-"""Final-style BERT text-only training/evaluation (train+valid → test).
+"""Model 1: BERT text-only for fake news detection.
+----------------------------
+This script trains a BERT classifier that uses ONLY the text statement.
+It is the baseline model in the project. 
 
-Implements "Model 1: BERT (text only)".
+The high-level pipeline is:
 
-High-level flow:
-- Load processed CSVs (train + valid + test)
-- Fine-tune a pretrained BERT model on train+valid
-- Evaluate once on the held-out test split
-- Save metrics (JSON + TXT) + optionally the trained model
+    raw statement text
+        -> BERT tokenizer
+        -> BERT encoder
+        -> [CLS] embedding, a 768-number summary vector
+        -> small neural-network classifier
+        -> predicted fake-news label
 
-Run (from repo root):
-    python3 fake_news_detection/scripts/bert_v3.py
-    python3 fake_news_detection/scripts/train_bert_text_only.py
+
+Architecture
+------------
+- BERT encoder  →  [CLS] embedding  (768-dim)
+- Classifier: [CLS] vector  →  Linear → ReLU → Dropout → Linear → logits
+
+Run:
+    python fake_news_detection/scripts/bert_text_only.py
 """
 
 import json
@@ -19,350 +28,447 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import torch
 
-from torch.utils.data import Dataset
+import torch
+import torch.nn as nn
+
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
     confusion_matrix,
     f1_score,
-    precision_recall_fscore_support,
 )
 
+# DataLoader groups many Dataset items into mini-batches for training.
+from torch.utils.data import Dataset, DataLoader
+# Hugging Face Transformers provides the pretrained BERT tokenizer/model
+# and the linear learning-rate scheduler with warm-up.
 from transformers import (
     AutoTokenizer,
-    AutoModelForSequenceClassification,
-    TrainingArguments,
-    Trainer,
+    AutoModel,
+    get_linear_schedule_with_warmup,
     set_seed,
 )
 
 
-# --------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # Paths and configuration
-# --------------------------------------------------
+# ---------------------------------------------------------------------------
+# This section only defines where the script expects to find data and where it
+# will save outputs. It does not train anything yet.
+#
+# Expected project layout:
+#   fake_news_detection/
+#       scripts/bert_text_v2.py
+#       data/processed/cleaned_text/*.csv
+#       artifacts/final/bert_text_only/      <- metrics go here
+#       artifacts/models/bert_text_only/     <- trained weights go here
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
 
 CLEANED_TEXT_DIR = PROJECT_DIR / "data" / "processed" / "cleaned_text"
 
-# Match the rest of the repo: final evaluation metrics go under artifacts/final/
-METRICS_DIR = PROJECT_DIR / "artifacts" / "final"
+METRICS_DIR = PROJECT_DIR / "artifacts" / "final" / "bert_text_only"  #  <- metrics go here
+MODELS_DIR  = PROJECT_DIR / "artifacts" / "models" / "bert_text_only" #  <- trained weights go here
 
-# Keep trained weights separate (useful if you want to reuse without retraining).
-MODELS_DIR = PROJECT_DIR / "artifacts" / "models" / "bert_text_only"
 
-MODEL_NAME = "bert-base-uncased"
+# ---------------------------------------------------------------------------
+# Hyper-parameters
+# ---------------------------------------------------------------------------
 
-TEXT_COLUMN_PREFERRED = "statement"  # raw statement if present
-TEXT_COLUMN_FALLBACK = "statement_clean"
 
-MAX_LENGTH = 128 
-RANDOM_SEED = 42
+# Pretrained model downloaded from Hugging Face.
+MODEL_NAME   = "bert-base-uncased"
 
+MAX_LENGTH   = 128          # Max nr of BERT tokens per statement. Longer texts are truncated;
+                            # shorter texts are padded to exactly this length.
+RANDOM_SEED  = 42
+BATCH_SIZE   = 16
+NUM_EPOCHS   = 3
+LEARNING_RATE = 2e-5
+WEIGHT_DECAY  = 0.01         # Regularization term that discourages overly large weights
+WARMUP_RATIO  = 0.1          # fraction of total steps used for LR warm-up
+DROPOUT_RATE  = 0.3          # helps reduce overfitting in the classifier/fusion head
+HIDDEN_DIM    = 256          # size of the hidden layer in the fusion head
+
+
+# BERT works best with raw text because its own tokenizer handles splitting words
+# into wordpieces. 
+TEXT_COLUMN_PREFERRED = "statement"        # raw text — BERT tokenises itself
+TEXT_COLUMN_FALLBACK  = "statement_clean"
+
+# The script runs two experiments automatically:
+#   1. multiclass: predicts one of 6 truthfulness labels
+#   2. binary: predicts fake vs real / false vs true depending on your preprocessing
 EXPERIMENTS = {
     "multiclass_bert_text_only": {
         "train_files": ["train.processed.csv", "valid.processed.csv"],
-        "test_file": "test.processed.csv",
+        "test_file":   "test.processed.csv",
         "label_column": "label6_int",
-        "num_labels": 6,
+        "num_labels":   6,
     },
     "binary_bert_text_only": {
         "train_files": ["train_binary.processed.csv", "valid_binary.processed.csv"],
-        "test_file": "test_binary.processed.csv",
+        "test_file":   "test_binary.processed.csv",
         "label_column": "label2_int",
-        "num_labels": 2,
+        "num_labels":   2,
     },
 }
 
-
-# --------------------------------------------------
-# Reproducibility
-# --------------------------------------------------
-
 set_seed(RANDOM_SEED)
+# Avoids noisy warnings 
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 
-def _pick_text_column(df: pd.DataFrame) -> str:
-    """Prefer the raw statement column when available."""
+# ---------------------------------------------------------------------------
+# 1.  Dataset
+# ---------------------------------------------------------------------------
 
-    if TEXT_COLUMN_PREFERRED in df.columns:
-        return TEXT_COLUMN_PREFERRED
-    return TEXT_COLUMN_FALLBACK
+class TextDataset(Dataset):
+    """Converts CSV rows into tensors that BERT can consume.
 
+    A PyTorch Dataset behaves like a list -> when DataLoader asks for item `idx`,
+    `__getitem__` returns one training example. In this script, one example is:
+        statement text -> tokenized BERT inputs
+        label          -> integer class label
 
-# --------------------------------------------------
-# Data loading
-# --------------------------------------------------
-
-def load_dataframe(file_name):
-    file_path = CLEANED_TEXT_DIR / file_name
-
-    if not file_path.exists():
-        raise FileNotFoundError(
-            f"Could not find file: {file_path}\n"
-            f"Check CLEANED_TEXT_DIR and the file names in EXPERIMENTS."
-        )
-
-    return pd.read_csv(file_path)
-
-
-def validate_columns(df, text_column, label_column, file_description):
-    missing_columns = []
-
-    if text_column not in df.columns:
-        missing_columns.append(text_column)
-
-    if label_column not in df.columns:
-        missing_columns.append(label_column)
-
-    if missing_columns:
-        raise ValueError(
-            f"Missing required column(s) in {file_description}: {missing_columns}\n"
-            f"Available columns are: {list(df.columns)}"
-        )
-
-
-class BertTextDataset(Dataset):
-    """Torch Dataset that turns one row into BERT inputs.
-
-    Key idea: the tokenizer converts text to token IDs (+ attention mask). We pad
-    to a fixed length here to keep tensor shapes consistent.
+    The model never sees raw strings directly. It sees token IDs, attention masks,
+    token type IDs, and labels.
     """
 
-    def __init__(self, dataframe, tokenizer, text_column, label_column, max_length):
-        self.texts = dataframe[text_column].fillna("").astype(str).tolist()
-        self.labels = dataframe[label_column].astype(int).tolist()
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        tokenizer,
+        text_column: str,
+        label_column: str,
+        max_length: int,
+    ):
+    
+        self.texts    = df[text_column].fillna("").astype(str).tolist()
+        # Store labels as integers because CrossEntropyLoss expects integer class IDs.
+        self.labels   = df[label_column].astype(int).tolist()
         self.tokenizer = tokenizer
         self.max_length = max_length
 
     def __len__(self):
-        return len(self.texts)
+        return len(self.texts) # how many examples are in the dataset
 
-    def __getitem__(self, index):
-        encoded = self.tokenizer(
-            self.texts[index],
+    def __getitem__(self, idx):
+        # Tokenize one text example.
+        # truncation=True: cut text if it is longer than MAX_LENGTH.
+        # padding="max_length": pad all examples to the same length so they can form a batch.
+        # return_tensors="pt": return PyTorch tensors.
+        enc = self.tokenizer(
+            self.texts[idx],
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
             return_tensors="pt",
         )
-
-        item = {
-            "input_ids": encoded["input_ids"].squeeze(0),
-            "attention_mask": encoded["attention_mask"].squeeze(0),
-            "labels": torch.tensor(self.labels[index], dtype=torch.long),
+        # BERT receives input_ids and attention_mask.
+        # token_type_ids are included for consistency with the metadata script.
+        # labels are used only during training/evaluation to compute the loss/metrics.
+        return {
+            "input_ids":      enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "token_type_ids": enc.get(
+                "token_type_ids",
+                torch.zeros(self.max_length, dtype=torch.long),
+            ).squeeze(0),
+            "labels":         torch.tensor(self.labels[idx], dtype=torch.long),
         }
 
-        return item
+
+# ---------------------------------------------------------------------------
+# 2.  Text-only model
+# ---------------------------------------------------------------------------
+
+class BertTextOnly(nn.Module):
+    """
+    The neural network used for the text-only BERT model.
+
+    This is the most important class in the file. It explicitly defines the
+    architecture 
+
+    BERT encoder  →  classifier head  →  classifier.
+
+    Text path  : BERT [CLS] token  →  768-dim vector
+    Classifier : Linear(768, HIDDEN_DIM)  →  ReLU
+                 →  Dropout  →  Linear(HIDDEN_DIM, num_labels)
+    """
+
+    def __init__(self, bert_model_name: str, num_labels: int):
+        super().__init__()
+        # Load the pretrained BERT encoder without a built-in classification head.
+        # We add our own classifier below so the text-only model mirrors the
+        # BERT + metadata model as closely as possible.
+        self.bert = AutoModel.from_pretrained(bert_model_name)
+        # For bert-base-uncased, each token representation has 768 dimensions.
+        bert_dim  = self.bert.config.hidden_size          # 768 for bert-base
+
+        # This classifier receives the 768-dimensional [CLS] vector and outputs
+        # one score per class. These raw scores are called logits.
+        self.classifier = nn.Sequential(
+            nn.Linear(bert_dim, HIDDEN_DIM),
+            nn.ReLU(),
+            nn.Dropout(DROPOUT_RATE),
+            nn.Linear(HIDDEN_DIM, num_labels),
+        )
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        token_type_ids: torch.Tensor,
+    ) -> torch.Tensor:
+        # Forward pass through BERT.
+        # Output shape of last_hidden_state is: (batch_size, sequence_length, 768).
+        outputs = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+        )
+        # [CLS] representation — shape (batch, 768).
+        # The first token position, index 0, corresponds to BERT's special [CLS] token.
+        # For classification tasks, this vector is commonly used as a summary of the text.
+        cls_embedding = outputs.last_hidden_state[:, 0, :]
+
+        # Return logits, not probabilities. CrossEntropyLoss expects raw logits.
+        return self.classifier(cls_embedding)          # (batch, num_labels)
 
 
-# --------------------------------------------------
-# Metrics
-# --------------------------------------------------
+# ---------------------------------------------------------------------------
+# 3.  Training loop
+# ---------------------------------------------------------------------------
 
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    predictions = np.argmax(logits, axis=-1)
+# One epoch means one complete pass through the training set.
+def train_one_epoch(model, loader, optimizer, scheduler, device, criterion):
+    # Enable training mode: dropout is active and gradients are tracked.
+    model.train()
+    total_loss = 0.0
 
-    accuracy = accuracy_score(labels, predictions)
+    for batch in loader:
+        # Each batch is a dictionary created by TextDataset and grouped by DataLoader.
+        input_ids      = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+        token_type_ids = batch["token_type_ids"].to(device)
+        labels         = batch["labels"].to(device)
 
-    f1_macro = f1_score(
-        labels,
-        predictions,
-        average="macro",
-        zero_division=0,
+        # Remove gradients from the previous batch. PyTorch accumulates gradients by default.
+        optimizer.zero_grad()
+        # Forward pass: get model predictions as logits.
+        logits = model(input_ids, attention_mask, token_type_ids)
+
+        # Compare predictions with true labels.
+        # CrossEntropyLoss combines softmax + negative log likelihood internally.
+        loss   = criterion(logits, labels)
+        # Backpropagation: compute gradients for all trainable parameters.
+        loss.backward()
+
+        # Gradient clipping — standard practice for fine-tuning BERT
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+        # Update model weights using gradients.
+        optimizer.step()
+
+        # Update learning rate according to the warm-up/decay schedule.
+        scheduler.step()
+        total_loss += loss.item()
+
+    return total_loss / len(loader)
+
+
+# During evaluation we do not want to compute gradients, so torch.no_grad() saves memory.
+@torch.no_grad()
+def predict(model, loader, device) -> tuple[np.ndarray, np.ndarray]:
+    # Evaluation mode: dropout is disabled, so predictions are deterministic for a fixed model.
+    model.eval()
+    all_preds  = []
+    all_labels = []
+
+    for batch in loader:
+        input_ids      = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+        token_type_ids = batch["token_type_ids"].to(device)
+        labels         = batch["labels"]
+
+        # Forward pass on the test batch.
+        logits = model(input_ids, attention_mask, token_type_ids)
+
+        # Select the class with the highest logit score for each example.
+        preds  = torch.argmax(logits, dim=-1).cpu().numpy()
+
+        all_preds.extend(preds.tolist())
+        all_labels.extend(labels.numpy().tolist())
+
+    return np.array(all_preds), np.array(all_labels)
+
+
+# ---------------------------------------------------------------------------
+# 4.  Main experiment runner
+# ---------------------------------------------------------------------------
+
+# Prefer raw statements when available, otherwise fall back to cleaned text.
+def _pick_text_column(df: pd.DataFrame) -> str:
+    return (
+        TEXT_COLUMN_PREFERRED
+        if TEXT_COLUMN_PREFERRED in df.columns
+        else TEXT_COLUMN_FALLBACK
     )
 
-    f1_weighted = f1_score(
-        labels,
-        predictions,
-        average="weighted",
-        zero_division=0,
-    )
 
-    precision_macro, recall_macro, _, _ = precision_recall_fscore_support(
-        labels,
-        predictions,
-        average="macro",
-        zero_division=0,
-    )
+# Runs one complete experiment: load data, train model, evaluate, save outputs.
+def run_experiment(name: str, config: dict) -> dict:
+    print(f"\n{'='*60}")
+    print(f"Experiment: {name}")
+    print(f"{'='*60}")
 
-    return {
-        "accuracy": float(accuracy),
-        "f1_macro": float(f1_macro),
-        "f1_weighted": float(f1_weighted),
-        "precision_macro": float(precision_macro),
-        "recall_macro": float(recall_macro),
-    }
+    # --- Load data ---
+    # Training uses train + validation combined. The test set is held out until final evaluation.
+    train_dfs = [
+        pd.read_csv(CLEANED_TEXT_DIR / f)
+        for f in config["train_files"]
+    ]
+    train_df = pd.concat(train_dfs, ignore_index=True)
+    test_df  = pd.read_csv(CLEANED_TEXT_DIR / config["test_file"])
 
+    label_column = config["label_column"]
+    num_labels   = config["num_labels"]
+    text_column  = _pick_text_column(train_df)
 
-# --------------------------------------------------
-# Training arguments
-# --------------------------------------------------
+    print(f"  Train rows : {len(train_df)}")
+    print(f"  Test rows  : {len(test_df)}")
+    print(f"  Text column: {text_column}")
+    print(f"  Labels     : {num_labels}")
 
-def build_training_args(name):
-    # Trainer needs an output directory even when we don't save checkpoints.
-    output_dir = MODELS_DIR / name / "checkpoints"
-
-    return TrainingArguments(
-        output_dir=str(output_dir),
-        
-        # Important: we don't evaluate on the test set during training.
-        # We only evaluate once at the end on the held-out test split.
-        eval_strategy="no",
-        save_strategy="no",
-
-        learning_rate=2e-5,
-        per_device_train_batch_size=16,
-        per_device_eval_batch_size=32,
-        num_train_epochs=3,
-        weight_decay=0.01,
-
-        # Since save_strategy="no", we cannot load the best checkpoint at the end.
-        load_best_model_at_end=False,
-
-
-        logging_steps=50,
-
-        report_to="none",
-
-        seed=RANDOM_SEED,
-    )
-
-
-# --------------------------------------------------
-# Training/evaluation
-# --------------------------------------------------
-
-def evaluate_split(name, train_df, eval_df, label_column, num_labels):
-    # Choose which text column to use based on what's in the processed CSV.
-    text_column = _pick_text_column(train_df)
-
-    validate_columns(
-        train_df,
-        text_column=text_column,
-        label_column=label_column,
-        file_description=f"{name} training data",
-    )
-
-    validate_columns(
-        eval_df,
-        text_column=text_column,
-        label_column=label_column,
-        file_description=f"{name} evaluation data",
-    )
-
-    # Reduce noisy parallel tokenizers warnings on Windows.
-    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-
+    # --- Tokenizer ---
+    # The tokenizer converts raw text into BERT token IDs.
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
-    train_dataset = BertTextDataset(
-        dataframe=train_df,
+    train_dataset = TextDataset(
+        df=train_df,
+        tokenizer=tokenizer,
+        text_column=text_column,
+        label_column=label_column,
+        max_length=MAX_LENGTH,
+    )
+    test_dataset = TextDataset(
+        df=test_df,
         tokenizer=tokenizer,
         text_column=text_column,
         label_column=label_column,
         max_length=MAX_LENGTH,
     )
 
-    eval_dataset = BertTextDataset(
-        dataframe=eval_df,
-        tokenizer=tokenizer,
-        text_column=text_column,
-        label_column=label_column,
-        max_length=MAX_LENGTH,
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        num_workers=0,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=BATCH_SIZE * 2,
+        shuffle=False,
+        num_workers=0,
     )
 
-    model = AutoModelForSequenceClassification.from_pretrained(
-        MODEL_NAME,
+    # --- Device ---
+    # Use GPU when available. Otherwise, run on CPU, which is much slower for BERT.
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"  Device: {device}")
+
+    # --- Model ---
+    # Create a fresh model for this experiment. The multiclass and binary experiments
+    # are trained separately because they have different numbers of output labels.
+    model = BertTextOnly(
+        bert_model_name=MODEL_NAME,
         num_labels=num_labels,
+    ).to(device)
+
+    # --- Optimiser & scheduler ---
+    # AdamW is the standard optimizer for fine-tuning transformer models.
+    # The scheduler first warms up the learning rate, then linearly decays it.
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=LEARNING_RATE,
+        weight_decay=WEIGHT_DECAY,
     )
 
-    training_args = build_training_args(name)
-
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        # No eval_dataset: final evaluation happens once via trainer.predict below.
-
-        # Newer transformers versions prefer processing_class.
-        # If your version complains, replace this with: tokenizer=tokenizer
-        processing_class=tokenizer,
+    total_steps  = len(train_loader) * NUM_EPOCHS
+    warmup_steps = int(total_steps * WARMUP_RATIO)
+    scheduler    = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=warmup_steps,
+        num_training_steps=total_steps,
     )
 
-    trainer.train()
+# CrossEntropyLoss is used for multi-class classification, including binary
+    # classification when the model outputs 2 logits.
+    criterion = nn.CrossEntropyLoss()
 
-    # Final test evaluation (held-out split).
-    predictions_output = trainer.predict(eval_dataset)
-    predictions = np.argmax(predictions_output.predictions, axis=-1)
-    y_eval = eval_df[label_column].astype(int).to_numpy()
+    # --- Training loop ---
+    for epoch in range(1, NUM_EPOCHS + 1):
+        avg_loss = train_one_epoch(
+            model, train_loader, optimizer, scheduler, device, criterion
+        )
+        print(f"  Epoch {epoch}/{NUM_EPOCHS}  loss={avg_loss:.4f}")
 
+    # --- Final evaluation on held-out test set ---
+    # Important: the test set is not used during training. It is used once here.
+    predictions, y_true = predict(model, test_loader, device)
+
+    # Store all important evaluation results in a dictionary so they can be saved
+    # as JSON and summarized in a text file.
     metrics = {
-        "dataset": name,
-        "model_name": MODEL_NAME,
-        "text_column": text_column,
+        "dataset":      name,
+        "model_name":   MODEL_NAME,
+        "text_column":  text_column,
         "label_column": label_column,
-        "num_labels": int(num_labels),
-        "max_length": int(MAX_LENGTH),
-        "train_rows": int(len(train_df)),
-        "eval_rows": int(len(eval_df)),
-        "accuracy": float(accuracy_score(y_eval, predictions)),
-        "f1_macro": float(
-            f1_score(
-                y_eval,
-                predictions,
-                average="macro",
-                zero_division=0,
-            )
-        ),
-        "f1_weighted": float(
-            f1_score(
-                y_eval,
-                predictions,
-                average="weighted",
-                zero_division=0,
-            )
-        ),
-        "labels": sorted(pd.Series(y_eval).astype(str).unique().tolist()),
-        "confusion_matrix": confusion_matrix(y_eval, predictions).tolist(),
+        "num_labels":   int(num_labels),
+        "max_length":   int(MAX_LENGTH),
+        "train_rows":   int(len(train_df)),
+        "eval_rows":    int(len(test_df)),
+        "accuracy":     float(accuracy_score(y_true, predictions)),
+        "f1_macro":     float(f1_score(y_true, predictions, average="macro",    zero_division=0)),
+        "f1_weighted":  float(f1_score(y_true, predictions, average="weighted", zero_division=0)),
+        "labels":       sorted(pd.Series(y_true).astype(str).unique().tolist()),
+        "confusion_matrix":      confusion_matrix(y_true, predictions).tolist(),
         "classification_report": classification_report(
-            y_eval,
-            predictions,
-            output_dict=True,
-            zero_division=0,
+            y_true, predictions, output_dict=True, zero_division=0
         ),
     }
 
-    # Save trained weights so you can reuse the model without retraining.
-    model_dir = MODELS_DIR / name / "final_model"
-    model_dir.mkdir(parents=True, exist_ok=True)
-
-    trainer.model.save_pretrained(
-        str(model_dir),
-        safe_serialization=False,
+    print(
+        f"\n  → accuracy={metrics['accuracy']:.4f}  "
+        f"f1_macro={metrics['f1_macro']:.4f}  "
+        f"f1_weighted={metrics['f1_weighted']:.4f}"
     )
 
+    # --- Save metrics ---
+    _save_results(name, metrics)
+
+    # --- Save model weights ---
+    model_dir = MODELS_DIR / name
+    model_dir.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), model_dir / "model_weights.pt")
     tokenizer.save_pretrained(str(model_dir))
 
     return metrics
 
 
-# --------------------------------------------------
-# Saving results
-# --------------------------------------------------
-
-def save_results(name, metrics):
+# Save both a detailed JSON file and a smaller human-readable TXT summary.
+def _save_results(name: str, metrics: dict) -> None:
     METRICS_DIR.mkdir(parents=True, exist_ok=True)
 
     json_path = METRICS_DIR / f"{name}_metrics.json"
-    txt_path = METRICS_DIR / f"{name}_summary.txt"
+    txt_path  = METRICS_DIR / f"{name}_summary.txt"
 
-    with open(json_path, "w", encoding="utf-8") as file_handle:
-        json.dump(metrics, file_handle, indent=2)
+    with open(json_path, "w", encoding="utf-8") as fh:
+        json.dump(metrics, fh, indent=2)
 
     summary_lines = [
         f"dataset: {metrics['dataset']}",
@@ -382,65 +488,43 @@ def save_results(name, metrics):
         json.dumps(metrics["confusion_matrix"]),
     ]
 
-    with open(txt_path, "w", encoding="utf-8") as file_handle:
-        file_handle.write("\n".join(summary_lines))
+    with open(txt_path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(summary_lines))
 
 
-# --------------------------------------------------
-# Experiment loop
-# --------------------------------------------------
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
-def run_experiment(name, config):
-    train_dfs = [
-        load_dataframe(file_name)
-        for file_name in config["train_files"]
-    ]
-
-    train_df = pd.concat(train_dfs, ignore_index=True)
-    eval_df = load_dataframe(config["test_file"])
-
-    metrics = evaluate_split(
-        name=name,
-        train_df=train_df,
-        eval_df=eval_df,
-        label_column=config["label_column"],
-        num_labels=config["num_labels"],
-    )
-
-    save_results(name, metrics)
-
-    return metrics
-
-
+# Entry point. This function runs both experiments defined in EXPERIMENTS.
 def main():
     METRICS_DIR.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"Using model: {MODEL_NAME}")
-    print(f"Reading data from: {CLEANED_TEXT_DIR}")
-    print(f"Writing metrics to: {METRICS_DIR}")
-    print(f"Writing models to: {MODELS_DIR}")
+    print(f"Model      : {MODEL_NAME}")
+    print(f"Data dir   : {CLEANED_TEXT_DIR}")
+    print(f"Metrics dir: {METRICS_DIR}")
+    print(f"Models dir : {MODELS_DIR}")
 
     if torch.cuda.is_available():
-        print(f"CUDA available: yes")
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        print(f"CUDA: yes  —  GPU: {torch.cuda.get_device_name(0)}")
     else:
-        print("CUDA available: no")
-        print("Warning: BERT training will be slow on CPU.")
+        print("CUDA: no  (training will be slow on CPU)")
 
     results = {
         name: run_experiment(name, config)
         for name, config in EXPERIMENTS.items()
     }
 
-    print("\nFinal results:")
-
-    for name, metrics in results.items():
+    print("\n" + "="*60)
+    print("Final results")
+    print("="*60)
+    for name, m in results.items():
         print(
-            f"{name}: "
-            f"accuracy={metrics['accuracy']:.4f}, "
-            f"f1_macro={metrics['f1_macro']:.4f}, "
-            f"f1_weighted={metrics['f1_weighted']:.4f}"
+            f"  {name}\n"
+            f"    accuracy={m['accuracy']:.4f}  "
+            f"f1_macro={m['f1_macro']:.4f}  "
+            f"f1_weighted={m['f1_weighted']:.4f}"
         )
 
 

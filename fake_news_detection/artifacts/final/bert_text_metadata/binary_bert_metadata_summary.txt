@@ -1,15 +1,16 @@
-dataset: binary_bert_text_only
+dataset: binary_bert_metadata
 model_name: bert-base-uncased
 text_column: statement
 label_column: label2_int
 num_labels: 2
+meta_dim: 6961
 max_length: 128
 train_rows: 7288
 eval_rows: 802
-accuracy: 0.6708
-f1_macro: 0.6517
-f1_weighted: 0.6637
+accuracy: 0.6796
+f1_macro: 0.6581
+f1_weighted: 0.6707
 labels: 0, 1
 
 confusion_matrix:
-[[175, 167], [97, 363]]
+[[172, 170], [87, 373]]
