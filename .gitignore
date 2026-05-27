@@ -6,6 +6,19 @@ venv/
 .env
 .venv/
 
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# OS
+Thumbs.db
 # Large training artifacts / model weights
 fake_news_detection/artifacts/models/bert_text_only/
 fake_news_detection/artifacts/models/bert_text_metadata/
