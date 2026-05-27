@@ -102,6 +102,7 @@ st.markdown(
 
 home = st.Page("pages/home.py", title="Home", icon=":material/home:")
 predict = st.Page("pages/predict.py", title="Demo", icon=":material/search:")
+final = st.Page("pages/final.py", title="Final Model", icon=":material/model_training:")
 
-pg = st.navigation([home, predict], position="hidden")
+pg = st.navigation([home, predict, final], position="hidden")
 pg.run()

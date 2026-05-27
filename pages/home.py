@@ -24,8 +24,13 @@ with col2:
 st.divider()
 
 st.markdown("##### Demo")
-if st.button("Test base model", use_container_width=False):
-    st.switch_page("pages/predict.py")
+col1, col2, _ = st.columns([1, 1, 2])
+with col1:
+    if st.button("Base model", use_container_width=True):
+        st.switch_page("pages/predict.py")
+with col2:
+    if st.button("Final model", use_container_width=True):
+        st.switch_page("pages/final.py")
 
 st.divider()
 st.caption("© 2026 [guba.dev](https://guba.dev)")
