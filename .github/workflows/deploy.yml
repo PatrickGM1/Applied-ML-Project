@@ -45,31 +45,11 @@ jobs:
             git fetch --all
             git reset --hard origin/${GITHUB_REF_NAME}
 
-      - name: Stop running containers
+      - name: Deploy containers
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            APP_DIR=/var/www/html/aml_html
-            docker ps -q --filter "publish=8502" | xargs -r docker stop
-            docker compose -f $APP_DIR/docker-compose.yml down --remove-orphans
-
-      - name: Build Docker images
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            docker compose -f /var/www/html/aml_html/docker-compose.yml build --no-cache
-
-      - name: Start containers
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            docker compose -f /var/www/html/aml_html/docker-compose.yml up -d
+            docker compose -f /var/www/html/aml_html/docker-compose.yml up --build -d
