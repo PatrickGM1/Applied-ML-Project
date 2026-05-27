@@ -17,7 +17,7 @@ services:
     container_name: fake_news_streamlit
     restart: unless-stopped
     ports:
-      - "8501:8501"
+      - "8502:8502"
     environment:
       - API_BASE_URL=http://backend:8000
     depends_on:

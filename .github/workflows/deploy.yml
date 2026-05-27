@@ -41,7 +41,7 @@ jobs:
             git fetch --all
             git reset --hard origin/${GITHUB_REF_NAME}
 
-            docker ps -q --filter "publish=8501" | xargs -r docker stop
+            docker ps -q --filter "publish=8502" | xargs -r docker stop
             docker compose -f $APP_DIR/docker-compose.yml down --remove-orphans
             docker compose -f $APP_DIR/docker-compose.yml build --no-cache
             docker compose -f $APP_DIR/docker-compose.yml up -d
