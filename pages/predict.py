@@ -4,12 +4,6 @@ import streamlit as st
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
-st.set_page_config(
-    page_title="Demo — Fake News Detection",
-    page_icon="🔍",
-    layout="centered",
-)
-
 st.markdown(
     """
     <style>

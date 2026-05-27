@@ -1,5 +1,11 @@
 ﻿import streamlit as st
 
+st.set_page_config(
+    page_title="aml.guba.dev — Fake News Detection",
+    page_icon="🔍",
+    layout="centered",
+)
+
 st.markdown(
     """
     <style>

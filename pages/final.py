@@ -3,12 +3,6 @@ import os
 
 import streamlit as st
 
-st.set_page_config(
-    page_title="Final Model — Fake News Detection",
-    page_icon="🔍",
-    layout="centered",
-)
-
 if st.button("← Home"):
     st.switch_page("pages/home.py")
 
