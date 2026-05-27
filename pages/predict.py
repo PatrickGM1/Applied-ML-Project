@@ -13,22 +13,20 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    #MainMenu, footer, header { visibility: hidden; }
-    [data-testid="stAppDeployButton"] { display: none; }
     .prob-row {
         display: flex; align-items: center; gap: 10px;
         margin-bottom: 6px; font-size: 0.9rem;
     }
     .prob-label { width: 110px; text-align: right; color: #888; }
-    .prob-label.top { color: #efefef; font-weight: 600; }
+    .prob-label.top { color: #e8e8e8; font-weight: 600; }
     .prob-bar-track {
-        flex: 1; height: 6px; background: #222;
+        flex: 1; height: 6px; background: #2a2a2a;
         border-radius: 999px; overflow: hidden;
     }
     .prob-bar-fill { height: 100%; background: #7c6af7; border-radius: 999px; }
     .prob-bar-fill.top { box-shadow: 0 0 6px rgba(124,106,247,0.6); }
     .prob-value { width: 48px; text-align: right; color: #888; font-variant-numeric: tabular-nums; }
-    .prob-value.top { color: #efefef; font-weight: 600; }
+    .prob-value.top { color: #e8e8e8; font-weight: 600; }
     </style>
     """,
     unsafe_allow_html=True,

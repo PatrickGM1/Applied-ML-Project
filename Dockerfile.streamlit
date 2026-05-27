@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir streamlit requests
 
 COPY streamlit_app.py .
 COPY pages/ pages/
+COPY .streamlit/ .streamlit/
 
 EXPOSE 8502
 
