@@ -53,4 +53,5 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             docker compose -f /var/www/html/aml_html/docker-compose.yml down
+            docker image rm -f aml_html-frontend aml_html-backend 2>/dev/null || true
             docker compose -f /var/www/html/aml_html/docker-compose.yml up --build -d
