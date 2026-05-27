@@ -45,17 +45,6 @@ jobs:
             git fetch --all
             git reset --hard origin/${GITHUB_REF_NAME}
 
-      - name: Configure nginx
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cp /var/www/html/aml_html/.nginxConfig /etc/nginx/sites-available/aml.guba.dev
-            ln -sf /etc/nginx/sites-available/aml.guba.dev /etc/nginx/sites-enabled/aml.guba.dev
-            nginx -t && systemctl reload nginx
-
       - name: Deploy containers
         uses: appleboy/ssh-action@v1.0.3
         with:
