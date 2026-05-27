@@ -52,4 +52,5 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            docker compose -f /var/www/html/aml_html/docker-compose.yml down
             docker compose -f /var/www/html/aml_html/docker-compose.yml up --build -d
