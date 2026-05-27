@@ -1,4 +1,8 @@
+import os
 import streamlit as st
+
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", API_BASE_URL)
 
 st.markdown("## aml.guba.dev")
 st.markdown("Applied Machine Learning project")
@@ -11,9 +15,9 @@ st.divider()
 st.markdown("##### API")
 col1, col2, _ = st.columns([1, 1, 2])
 with col1:
-    st.link_button("⏱ Test endpoint", "http://localhost:8000/health")
+    st.link_button("⏱ Test endpoint", f"{PUBLIC_BASE_URL}/health")
 with col2:
-    st.link_button("📄 Swagger UI", "http://localhost:8000/docs")
+    st.link_button("📄 Swagger UI", f"{PUBLIC_BASE_URL}/docs")
 
 st.divider()
 

@@ -25,6 +25,7 @@ services:
       - "8502:8502"
     environment:
       - API_BASE_URL=http://backend:8000
+      - PUBLIC_BASE_URL=https://aml.guba.dev
     depends_on:
       - backend
     networks:
