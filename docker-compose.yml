@@ -28,18 +28,3 @@ services:
 networks:
   app-net:
     driver: bridge
-
-  frontend:
-    build: ./frontend
-    container_name: fake_news_frontend
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-    networks:
-      - app-net
-
-networks:
-  app-net:
-    driver: bridge
