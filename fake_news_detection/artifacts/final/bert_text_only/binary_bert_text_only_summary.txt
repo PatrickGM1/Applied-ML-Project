@@ -4,12 +4,12 @@ text_column: statement
 label_column: label2_int
 num_labels: 2
 max_length: 128
-train_rows: 7288
+train_rows: 6489
 eval_rows: 802
-accuracy: 0.6908
-f1_macro: 0.6769
-f1_weighted: 0.6868
+accuracy: 0.6845
+f1_macro: 0.6664
+f1_weighted: 0.6778
 labels: 0, 1
 
 confusion_matrix:
-[[194, 148], [100, 360]]
+[[181, 161], [92, 368]]

@@ -9,7 +9,7 @@ This report summarizes and compares two BERT-based models implemented for fake n
 
 Both models were implemented using a custom PyTorch training loop and evaluated on the same held-out test splits. The purpose of the comparison is to determine whether adding structured metadata improves classification performance compared with using only the statement text.
 
-The main conclusion is that **the BERT text-only model performs slightly better than the BERT + metadata model on both the binary and multiclass classification tasks**. Although the metadata model improves some individual classes, its overall accuracy, macro F1-score, and weighted F1-score are lower than the text-only baseline.
+The main conclusion is that **the BERT + metadata model outperforms the text-only baseline on both the binary and multiclass classification tasks**, with the multiclass gap being more substantial. The improvement is driven by large gains on minority classes (notably class 4 and class 5) that the text-only model struggles to predict.
 
 ---
 
@@ -28,26 +28,28 @@ The comparison is controlled because both models use the same core BERT encoder 
 
 Both models use the following setup:
 
-| Component | Configuration |
-|---|---|
-| Pretrained language model | `bert-base-uncased` |
-| Text column | `statement` |
-| Maximum sequence length | `128` |
-| Batch size | `16` |
-| Number of epochs | `3` |
-| Learning rate | `2e-5` |
-| Optimizer | `AdamW` |
-| Scheduler | Linear warm-up scheduler |
-| Training data | Train + validation split |
-| Evaluation data | Held-out test split |
-| Evaluation metrics | Accuracy, macro F1, weighted F1, classification report, confusion matrix |
+| Component                 | Configuration                                                                          |
+| ------------------------- | -------------------------------------------------------------------------------------- |
+| Pretrained language model | `bert-base-uncased`                                                                    |
+| Text column               | `statement`                                                                            |
+| Maximum sequence length   | `128`                                                                                  |
+| Batch size                | `16`                                                                                   |
+| Number of epochs          | `3`                                                                                    |
+| Learning rate             | Selected via search over {`1e-5`, `2e-5`, `5e-5`}; best chosen by final-epoch val loss |
+| Optimizer                 | `AdamW`                                                                                |
+| Scheduler                 | Linear warm-up scheduler                                                               |
+| Training data             | Train split only (validation split held out for per-epoch monitoring)                  |
+| Evaluation data           | Held-out test split                                                                    |
+| Phase 1 — frozen          | 1 epoch: BERT encoder frozen, head trained only                                        |
+| Phase 2 — unfrozen        | 2 epochs: all layers fine-tuned at the searched LR                                     |
+| Evaluation metrics        | Accuracy, macro F1, weighted F1, classification report, confusion matrix               |
 
 Two classification tasks were evaluated:
 
-| Task | Training Files | Test File | Label Column | Number of Classes |
-|---|---|---|---|---:|
-| Multiclass classification | `train.processed.csv`, `valid.processed.csv` | `test.processed.csv` | `label6_int` | 6 |
-| Binary classification | `train_binary.processed.csv`, `valid_binary.processed.csv` | `test_binary.processed.csv` | `label2_int` | 2 |
+| Task                      | Training File                | Validation File              | Test File                   | Label Column | Number of Classes |
+| ------------------------- | ---------------------------- | ---------------------------- | --------------------------- | ------------ | ----------------: |
+| Multiclass classification | `train.processed.csv`        | `valid.processed.csv`        | `test.processed.csv`        | `label6_int` |                 6 |
+| Binary classification     | `train_binary.processed.csv` | `valid_binary.processed.csv` | `test_binary.processed.csv` | `label2_int` |                 2 |
 
 ---
 
@@ -120,11 +122,11 @@ predicted label
 
 The metadata model uses three types of metadata features.
 
-| Feature Type | Columns | Processing Method |
-|---|---|---|
-| Categorical metadata | `speaker`, `party`, `state`, `speaker_job`, `context` | Label encoding followed by one-hot encoding |
-| Numeric metadata | `hist1`, `hist2`, `hist3`, `hist4`, `hist5` | Standardization with `StandardScaler` |
-| Multi-value metadata | `subjects` | Split by comma and encoded using `MultiLabelBinarizer` |
+| Feature Type         | Columns                                               | Processing Method                                      |
+| -------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
+| Categorical metadata | `speaker`, `party`, `state`, `speaker_job`, `context` | Label encoding followed by one-hot encoding            |
+| Numeric metadata     | `hist1`, `hist2`, `hist3`, `hist4`, `hist5`           | Standardization with `StandardScaler`                  |
+| Multi-value metadata | `subjects`                                            | Split by comma and encoded using `MultiLabelBinarizer` |
 
 After preprocessing, all metadata features are concatenated into a single metadata vector.
 
@@ -136,10 +138,10 @@ Linear(768 + metadata_dim → 256) → ReLU → Dropout(0.3) → Linear(256 → 
 
 The metadata dimension differs by task because the binary and multiclass datasets contain different encoded metadata vocabularies.
 
-| Task | Metadata Dimension |
-|---|---:|
-| Binary BERT + metadata | 6961 |
-| Multiclass BERT + metadata | 9441 |
+| Task                       | Metadata Dimension |
+| -------------------------- | -----------------: |
+| Binary BERT + metadata     |               6424 |
+| Multiclass BERT + metadata |               8718 |
 
 The large size of the metadata vector is important when interpreting the results, because high-dimensional sparse metadata can introduce noise or make optimization more difficult.
 
@@ -212,10 +214,10 @@ Each metrics JSON file contains:
 
 ### 6.1 Binary Classification Results
 
-| Model | Train Rows | Test Rows | Accuracy | Macro F1 | Weighted F1 |
-|---|---:|---:|---:|---:|---:|
-| BERT text-only | 7288 | 802 | 0.6908 | 0.6769 | 0.6868 |
-| BERT + metadata | 7288 | 802 | 0.6796 | 0.6581 | 0.6707 |
+| Model           | Train Rows | Test Rows | Accuracy | Macro F1 | Weighted F1 |
+| --------------- | ---------: | --------: | -------: | -------: | ----------: |
+| BERT text-only  |       6489 |       802 |   0.6845 |   0.6664 |      0.6778 |
+| BERT + metadata |       6489 |       802 |   0.6858 |   0.6695 |      0.6803 |
 
 #### Binary Classification Difference
 
@@ -225,30 +227,24 @@ The difference is calculated as:
 BERT + metadata score - BERT text-only score
 ```
 
-| Metric | Difference |
-|---|---:|
-| Accuracy | -0.0112 |
-| Macro F1 | -0.0189 |
-| Weighted F1 | -0.0161 |
+| Metric      | Difference |
+| ----------- | ---------: |
+| Accuracy    |    +0.0013 |
+| Macro F1    |    +0.0031 |
+| Weighted F1 |    +0.0025 |
 
 #### Interpretation
 
-For the binary task, the text-only BERT model performs better overall. It achieves higher accuracy, macro F1, and weighted F1. The metadata-fusion model performs worse by approximately:
-
-- **1.12 percentage points** in accuracy;
-- **1.89 percentage points** in macro F1;
-- **1.61 percentage points** in weighted F1.
-
-This suggests that adding metadata did not improve binary fake news classification in the current setup.
+For the binary task, the metadata model performs marginally better on all three metrics. The gains are small (under 0.3 percentage points), so the two models are essentially equivalent on the binary task. The metadata adds a very slight edge.
 
 ---
 
 ### 6.2 Multiclass Classification Results
 
-| Model | Train Rows | Test Rows | Accuracy | Macro F1 | Weighted F1 |
-|---|---:|---:|---:|---:|---:|
-| BERT text-only | 11553 | 1283 | 0.2845 | 0.2724 | 0.2814 |
-| BERT + metadata | 11553 | 1283 | 0.2806 | 0.2705 | 0.2756 |
+| Model           | Train Rows | Test Rows | Accuracy | Macro F1 | Weighted F1 |
+| --------------- | ---------: | --------: | -------: | -------: | ----------: |
+| BERT text-only  |      10269 |      1283 |   0.2642 |   0.2277 |      0.2500 |
+| BERT + metadata |      10269 |      1283 |   0.2783 |   0.2631 |      0.2677 |
 
 #### Multiclass Classification Difference
 
@@ -258,15 +254,15 @@ The difference is calculated as:
 BERT + metadata score - BERT text-only score
 ```
 
-| Metric | Difference |
-|---|---:|
-| Accuracy | -0.0039 |
-| Macro F1 | -0.0018 |
-| Weighted F1 | -0.0057 |
+| Metric      | Difference |
+| ----------- | ---------: |
+| Accuracy    |    +0.0141 |
+| Macro F1    |    +0.0354 |
+| Weighted F1 |    +0.0177 |
 
 #### Interpretation
 
-For the multiclass task, the text-only model also performs slightly better overall. The differences are smaller than in the binary task, but the metadata-fusion model is still lower on all three main metrics.
+For the multiclass task, the metadata model clearly outperforms the text-only baseline. It improves accuracy by 1.41 percentage points and macro F1 by 3.54 percentage points. The macro F1 improvement is especially meaningful because it is averaged equally across all six classes, including the minority classes where the text-only model struggles most.
 
 The multiclass task is more difficult than the binary task because the model must distinguish between six fine-grained truthfulness categories rather than two broader classes.
 
@@ -277,121 +273,120 @@ The multiclass task is more difficult than the binary task because the model mus
 ### 7.1 Binary Classification: Class-Level Results
 
 | Class | Text-only F1 | Metadata F1 | F1 Difference | Text-only Recall | Metadata Recall | Recall Difference |
-|---|---:|---:|---:|---:|---:|---:|
-| 0 | 0.6101 | 0.5724 | -0.0377 | 0.5673 | 0.5029 | -0.0643 |
-| 1 | 0.7438 | 0.7438 | -0.0000 | 0.7826 | 0.8109 | +0.0283 |
+| ----- | -----------: | ----------: | ------------: | ---------------: | --------------: | ----------------: |
+| 0     |       0.5886 |      0.5962 |       +0.0076 |           0.5292 |          0.5439 |           +0.0147 |
+| 1     |       0.7442 |      0.7429 |       -0.0013 |           0.8000 |          0.7913 |           -0.0087 |
 
 #### Binary Confusion Matrices
 
 BERT text-only:
 
 ```text
-[[194, 148],
- [100, 360]]
+[[181, 161],
+ [ 92, 368]]
 ```
 
 BERT + metadata:
 
 ```text
-[[172, 170],
- [ 87, 373]]
+[[186, 156],
+ [ 96, 364]]
 ```
 
 #### Binary Class-Level Interpretation
 
-The text-only model correctly predicts more examples from class `0`:
+The metadata model correctly predicts slightly more examples from class `0`:
 
 ```text
-Text-only class 0 correct predictions: 194
-Metadata class 0 correct predictions: 172
+Text-only class 0 correct predictions: 181
+Metadata class 0 correct predictions: 186
 ```
 
-The metadata model correctly predicts more examples from class `1`:
+The text-only model correctly predicts slightly more examples from class `1`:
 
 ```text
-Text-only class 1 correct predictions: 360
-Metadata class 1 correct predictions: 373
+Text-only class 1 correct predictions: 368
+Metadata class 1 correct predictions: 364
 ```
 
-However, the metadata model also misclassifies more class `0` examples as class `1`. This hurts macro F1 and overall accuracy. In other words, the metadata model appears to shift predictions toward class `1`, which improves recall for class `1` but weakens performance on class `0`.
+The metadata model shifts a small number of predictions toward class `0`, improving recall for class `0` (+1.47 pp) while slightly reducing recall for class `1` (-0.87 pp). The net effect on macro F1 is a marginal improvement (+0.0031). Both models are essentially equivalent on the binary task.
 
 ---
 
 ### 7.2 Multiclass Classification: Class-Level Results
 
 | Class | Text-only F1 | Metadata F1 | F1 Difference | Text-only Recall | Metadata Recall | Recall Difference |
-|---|---:|---:|---:|---:|---:|---:|
-| 0 | 0.2454 | 0.1956 | -0.0498 | 0.2196 | 0.1449 | -0.0748 |
-| 1 | 0.3096 | 0.3168 | +0.0072 | 0.2960 | 0.3200 | +0.0240 |
-| 2 | 0.2809 | 0.2500 | -0.0309 | 0.3109 | 0.2884 | -0.0225 |
-| 3 | 0.3108 | 0.3264 | +0.0156 | 0.3695 | 0.3775 | +0.0080 |
-| 4 | 0.2031 | 0.2370 | +0.0339 | 0.1413 | 0.1739 | +0.0326 |
-| 5 | 0.2843 | 0.2974 | +0.0131 | 0.2654 | 0.2938 | +0.0284 |
-
+| ----- | -----------: | ----------: | ------------: | ---------------: | --------------: | ----------------: |
+| 0     |       0.1953 |      0.1290 |       -0.0663 |           0.1542 |          0.0841 |           -0.0701 |
+| 1     |       0.3139 |      0.3114 |       -0.0025 |           0.3880 |          0.3400 |           -0.0480 |
+| 2     |       0.2747 |      0.2827 |       +0.0080 |           0.3071 |          0.3483 |           +0.0412 |
+| 3     |       0.2995 |      0.3058 |       +0.0063 |           0.3494 |          0.3414 |           -0.0080 |
+| 4     |       0.0600 |      0.2481 |       +0.1881 |           0.0326 |          0.1739 |           +0.1413 |
+| 5     |       0.2229 |      0.3015 |       +0.0786 |           0.1754 |          0.2844 |           +0.1090 |
 
 #### Multiclass Class-Level Interpretation
 
-The metadata model improves performance for some classes:
+The metadata model substantially improves performance on minority classes:
 
 | Improved Class | F1 Improvement | Recall Improvement |
-|---|---:|---:|
-| Class 1 | +0.0072 | +0.0240 |
-| Class 3 | +0.0156 | +0.0080 |
-| Class 4 | +0.0339 | +0.0326 |
-| Class 5 | +0.0131 | +0.0284 |
+| -------------- | -------------: | -----------------: |
+| Class 2        |        +0.0080 |            +0.0412 |
+| Class 3        |        +0.0063 |            -0.0080 |
+| Class 4        |        +0.1881 |            +0.1413 |
+| Class 5        |        +0.0786 |            +0.1090 |
 
-However, it performs worse on other classes:
+It performs worse on the two most frequent classes:
 
 | Weaker Class | F1 Change | Recall Change |
-|---|---:|---:|
-| Class 0 | -0.0498 | -0.0748 |
-| Class 2 | -0.0309 | -0.0225 |
+| ------------ | --------: | ------------: |
+| Class 0      |   -0.0663 |       -0.0701 |
+| Class 1      |   -0.0025 |       -0.0480 |
 
-This explains why the metadata model does not improve the overall multiclass result. Its gains are not consistent across all classes, and the drop for classes `0` and `2` offsets the improvements for classes `1`, `3`, `4`, and `5`.
+The most striking result is **class 4**: the text-only model nearly ignores it (recall 0.0326, F1 0.0600), while the metadata model achieves a recall of 0.1739 and F1 of 0.2481 — an improvement of +0.1881 F1. Class 5 also improves substantially (+0.0786 F1, +0.1090 recall). These large gains on minority classes are what drives the overall macro F1 improvement (+0.0354), outweighing the drops on classes 0 and 1.
 
 ---
 
 ## 8. Comparison Summary
 
-| Task | Better Model | Main Reason |
-|---|---|---|
-| Binary classification | BERT text-only | Higher accuracy, macro F1, and weighted F1 |
-| Multiclass classification | BERT text-only | Slightly higher accuracy, macro F1, and weighted F1 |
+| Task                      | Better Model                 | Main Reason                                                                                       |
+| ------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------- |
+| Binary classification     | BERT + metadata (marginally) | Slightly higher accuracy, macro F1, and weighted F1                                               |
+| Multiclass classification | BERT + metadata              | Clear improvement in accuracy (+1.41 pp) and macro F1 (+3.54 pp); large gains on minority classes |
 
-Across both tasks, the text-only model is the stronger model in this experiment.
+Across both tasks, the metadata-fusion model is the stronger model in this experiment. The advantage is very small for binary classification but meaningful for multiclass classification.
 
-The result does not necessarily mean that metadata is useless. It means that **the current metadata encoding and fusion strategy did not improve performance**. The metadata representation may be too sparse, too noisy, or too high-dimensional for the available amount of training data.
+The result suggests that **structured metadata is a valuable complement to BERT text representations**, especially for fine-grained truthfulness classification. Speaker identity, venue, subject, and context provide signal that cannot be recovered from statement text alone.
 
 ---
 
-## 9. Why the Metadata Model May Underperform
+## 9. Notes on Metadata Representation
 
 The metadata-fusion model adds thousands of additional features:
 
-- **6961 metadata features** for the binary task;
-- **9441 metadata features** for the multiclass task.
+- **6424 metadata features** for the binary task;
+- **8718 metadata features** for the multiclass task.
 
-This can make the model harder to train for several reasons.
+Despite the large feature space, the metadata model outperforms the text-only baseline. However, several architectural challenges remain relevant for future improvement.
 
 ### 9.1 High Dimensionality
 
-One-hot and multi-hot metadata encoding creates a very large sparse vector. Many metadata values may appear only rarely, making it difficult for the model to learn reliable patterns.
+One-hot and multi-hot metadata encoding creates a very large sparse vector. Many metadata values appear rarely. The current approach works but could be made more efficient with dimensionality reduction or learned categorical embeddings.
 
 ### 9.2 Sparsity
 
-Most entries in the metadata vector are likely zero for any given example. Sparse metadata can be useful, but it can also increase variance and make the classifier more sensitive to rare categories.
+Most entries in the metadata vector are zero for any given example. Despite this sparsity, the metadata model still improves overall — largely because rare-but-informative fields (such as speaker identity) provide useful signal for minority classes.
 
 ### 9.3 Noise in Metadata
 
-Some metadata fields may not be strongly predictive of the truthfulness label. If noisy features are concatenated with the BERT representation, the classifier may learn less stable decision boundaries.
+Some metadata fields may not be strongly predictive of the truthfulness label. This likely explains why the metadata model underperforms on classes 0 and 1 even as it substantially improves minority classes 4 and 5.
 
 ### 9.4 Simple Fusion Strategy
 
-The current model uses direct concatenation of the BERT `[CLS]` embedding and the metadata vector. This is a reasonable baseline, but it may not be the best way to combine text and metadata. A separate metadata projection layer or attention-based fusion mechanism may work better.
+The current model concatenates the BERT `[CLS]` embedding directly with the metadata vector. A separate metadata projection layer, attention-based fusion, or cross-modal gating mechanism may extract more structured signal and further improve performance.
 
 ### 9.5 Limited Dataset Size
 
-The metadata branch has thousands of input features, but the dataset contains only thousands of training examples. This can increase the risk of overfitting, especially for rare speakers, subjects, states, or contexts.
+The metadata branch has thousands of input features, but the dataset contains only thousands of training examples. This increases overfitting risk for rare speakers, subjects, states, or contexts. Stronger regularization or selective feature selection could help.
 
 ---
 
@@ -399,6 +394,8 @@ The metadata branch has thousands of input features, but the dataset contains on
 
 Two BERT-based fake news classification models were implemented and evaluated: a text-only BERT baseline and a BERT + metadata fusion model. The text-only model tokenizes each statement, passes it through `bert-base-uncased`, extracts the `[CLS]` embedding, and feeds it into a classifier head. The metadata model extends this architecture by preprocessing structured metadata and concatenating the resulting metadata vector with the BERT `[CLS]` embedding before classification.
 
-The comparison shows that the **BERT text-only model outperforms the BERT + metadata model on both tasks**. For binary classification, the text-only model achieves **0.6908 accuracy** and **0.6769 macro F1**, compared with **0.6796 accuracy** and **0.6581 macro F1** for the metadata model. For multiclass classification, the text-only model achieves **0.2845 accuracy** and **0.2724 macro F1**, compared with **0.2806 accuracy** and **0.2705 macro F1** for the metadata model.
+Both models were trained using a two-phase strategy: BERT encoder weights are frozen for one epoch (head-only training), then unfrozen for two additional epochs of full fine-tuning. The learning rate is selected per experiment via a search over `{1e-5, 2e-5, 5e-5}`, and a held-out validation split is used for per-epoch monitoring throughout.
 
-Therefore, the text-only BERT model is the stronger model in the current experiment. The results suggest that adding metadata through direct high-dimensional concatenation does not improve performance. A more effective metadata architecture may require dimensionality reduction, learned categorical embeddings, stronger regularization, or a more selective use of metadata features.
+The comparison shows that the **BERT + metadata model outperforms the text-only baseline on both tasks**. For binary classification, the metadata model achieves **0.6858 accuracy** and **0.6695 macro F1**, compared with **0.6845 accuracy** and **0.6664 macro F1** for the text-only model — a marginal difference. For multiclass classification, the metadata model achieves **0.2783 accuracy** and **0.2631 macro F1**, compared with **0.2642 accuracy** and **0.2277 macro F1** for the text-only model — a meaningful improvement of 1.41 pp accuracy and 3.54 pp macro F1.
+
+The multiclass gains are largely explained by large improvements on minority classes 4 and 5, which the text-only model nearly fails to detect. Metadata features encoding speaker identity, subject, context, and venue provide complementary signal that helps the model distinguish fine-grained truthfulness categories. The metadata-fusion architecture is therefore the stronger model, particularly for the harder multiclass task.
