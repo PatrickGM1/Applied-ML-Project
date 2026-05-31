@@ -7,7 +7,7 @@ PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", API_BASE_URL)
 st.markdown("## aml.guba.dev")
 st.markdown("Applied Machine Learning project")
 st.markdown(
-    "Fake News Detection — [LIAR Dataset](https://www.kaggle.com/datasets/doanquanvietnamca/liar-dataset)"
+    "Fake News Detection -> [LIAR Dataset](https://www.kaggle.com/datasets/doanquanvietnamca/liar-dataset)"
 )
 
 st.divider()
