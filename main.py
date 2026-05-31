@@ -81,9 +81,21 @@ class PredictRequest(BaseModel):
     @field_validator("statement")
     @classmethod
     def statement_not_blank(cls, v: str) -> str:
-        if not v.strip():
+        v = v.strip()
+        if not v:
             raise ValueError("Statement must not be blank or whitespace only.")
         return v
+
+    @field_validator("party")
+    @classmethod
+    def normalize_party(cls, v: str) -> str:
+        # Training data stores party in lowercase (e.g. "republican", "democrat").
+        return v.strip().lower()
+
+    @field_validator("state", "speaker_job", "subjects")
+    @classmethod
+    def strip_whitespace(cls, v: str) -> str:
+        return v.strip()
 
     @field_validator("hist1", "hist2", "hist3", "hist4", "hist5")
     @classmethod
@@ -164,7 +176,6 @@ def predict(payload: PredictRequest):
     confidence = max(class_probabilities.values()) if class_probabilities else 0.0
 
     return {
-        "predicted_id": predicted_id,
         "predicted_label": predicted_label,
         "class_probabilities": class_probabilities,
         "confidence": confidence,
