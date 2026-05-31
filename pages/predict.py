@@ -44,7 +44,7 @@ with st.form("predict_form"):
         party = st.text_input("Party", placeholder="republican")
         speaker_job = st.text_input("Speaker job", placeholder="senator")
 
-    with st.expander("Speaker history (optional) — prior label counts for this speaker"):
+    with st.expander("Speaker history (optional) - prior label counts for this speaker"):
         h1, h2, h3, h4, h5 = st.columns(5)
         hist1 = h1.number_input("Barely true", min_value=0, step=1, value=0)
         hist2 = h2.number_input("False", min_value=0, step=1, value=0)
@@ -110,7 +110,7 @@ if submitted:
             )
 
         if data.get("is_low_confidence"):
-            st.warning("Low confidence — treat this as a weak signal, not a verdict.")
+            st.warning("Low confidence - treat this as a weak signal, not a verdict.")
 
         st.markdown("**Class probabilities**")
         probs = sorted(data.get("class_probabilities", {}).items(), key=lambda x: x[1], reverse=True)
