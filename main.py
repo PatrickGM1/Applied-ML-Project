@@ -1,14 +1,15 @@
+import math
 import pickle
 from pathlib import Path
 
 import joblib
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from scipy.sparse import hstack
 
 from fake_news_detection.features.metadata import transform_metadata
@@ -35,6 +36,19 @@ LEMMATIZER = WordNetLemmatizer()
 app = FastAPI(
     title="Fake News Detection API",
     version="1.0.0",
+    description="""Classifies political statements as **real** or **fake** using a
+TF-IDF + logistic regression model trained on the
+[LIAR dataset](https://www.kaggle.com/datasets/doanquanvietnamca/liar-dataset)
+(~12 000 PolitiFact fact-checks).
+
+**Binary labels:**
+- `real` - originally rated *true*, *mostly-true*, or *half-true*
+- `fake` - originally rated *false*, *barely-true*, or *pants-fire*
+
+The model uses TF-IDF bag-of-words features plus optional speaker metadata
+(party, state, job title, and how many times the speaker has been rated in each
+category before). Text preprocessing is done on the server so just send the
+raw statement as-is.""",
     openapi_tags=[
         {"name": "test", "description": "Health check endpoint"},
         {"name": "prediction", "description": "Model inference endpoint"},
@@ -66,19 +80,144 @@ def css():
 
 
 class PredictRequest(BaseModel):
-    statement: str
-    subjects: str = ""
-    party: str = "missing"
-    state: str = "missing"
-    speaker_job: str = "missing"
-    hist1: float = 0.0
-    hist2: float = 0.0
-    hist3: float = 0.0
-    hist4: float = 0.0
-    hist5: float = 0.0
+    """
+    Input for the fake-news classifier.
 
-@app.get("/health", tags=["test"])
+    Only `statement` is required. All other fields are optional and default to
+    neutral/missing values, but adding speaker metadata usually helps accuracy.
+    """
+
+    statement: str = Field(
+        ...,
+        min_length=1,
+        max_length=5000,
+        description="The raw political statement or claim to classify. "
+        "Text is preprocessed server-side (lowercased, punctuation removed, "
+        "stopwords filtered, lemmatized) so just send it as-is.",
+        examples=["The economy grew by 3% last quarter under my administration."],
+    )
+    subjects: str = Field(
+        default="",
+        description="Comma-separated topic tags for the statement (e.g. 'economy,jobs'). "
+        "Leave blank if unknown.",
+        examples=["economy,jobs"],
+    )
+    party: str = Field(
+        default="missing",
+        description="Political party affiliation of the speaker "
+        "(e.g. 'democrat', 'republican', 'none'). "
+        "Gets lowercased automatically.",
+        examples=["republican"],
+    )
+    state: str = Field(
+        default="missing",
+        description="U.S. state associated with the speaker at the time of the statement "
+        "(e.g. 'Texas', 'Illinois'). Use 'missing' if unknown.",
+        examples=["Texas"],
+    )
+    speaker_job: str = Field(
+        default="missing",
+        description="Job title of the speaker at the time of the statement "
+        "(e.g. 'President', 'State senator'). Use 'missing' if unknown.",
+        examples=["President"],
+    )
+    hist1: float = Field(
+        default=0.0,
+        ge=0,
+        description="Speaker's cumulative count of past statements rated 'barely true'.",
+        examples=[3],
+    )
+    hist2: float = Field(
+        default=0.0,
+        ge=0,
+        description="Speaker's cumulative count of past statements rated 'false'.",
+        examples=[7],
+    )
+    hist3: float = Field(
+        default=0.0,
+        ge=0,
+        description="Speaker's cumulative count of past statements rated 'half true'.",
+        examples=[5],
+    )
+    hist4: float = Field(
+        default=0.0,
+        ge=0,
+        description="Speaker's cumulative count of past statements rated 'mostly true'.",
+        examples=[10],
+    )
+    hist5: float = Field(
+        default=0.0,
+        ge=0,
+        description="Speaker's cumulative count of past statements rated 'pants on fire'.",
+        examples=[1],
+    )
+
+    @field_validator("statement")
+    @classmethod
+    def statement_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Statement must not be blank or whitespace only.")
+        return v
+
+    @field_validator("party")
+    @classmethod
+    def normalize_party(cls, v: str) -> str:
+        return v.strip().lower()
+
+    @field_validator("state", "speaker_job", "subjects")
+    @classmethod
+    def strip_whitespace(cls, v: str) -> str:
+        return v.strip()
+
+    @field_validator("hist1", "hist2", "hist3", "hist4", "hist5")
+    @classmethod
+    def history_counts_valid(cls, v: float) -> float:
+        if not math.isfinite(v):
+            raise ValueError("History counts must be finite numbers.")
+        if v < 0:
+            raise ValueError("History counts must be non-negative.")
+        return v
+
+
+class PredictionResponse(BaseModel):
+    """What you get back after classifying a statement."""
+
+    label: str = Field(
+        description="Predicted label: either `real` (true/mostly-true/half-true) "
+        "or `fake` (false/barely-true/pants-fire).",
+        examples=["fake"],
+    )
+    class_probabilities: dict[str, float] = Field(
+        description="Probability for each class. Keys are the label strings, values sum to 1.0.",
+        examples=[{"fake": 0.73, "real": 0.27}],
+    )
+    confidence: float = Field(
+        description="Probability of the winning class, same as max(class_probabilities). Between 0 and 1.",
+        examples=[0.73],
+    )
+    is_low_confidence: bool = Field(
+        description="True when confidence is below 0.60. Don't trust the result too much in that case.",
+        examples=[False],
+    )
+    cleaned_statement: str = Field(
+        description="The statement after server-side preprocessing. Useful for debugging if the prediction looks wrong.",
+        examples=["economy grow last quarter administration"],
+    )
+
+v1 = APIRouter(prefix="/v1")
+
+
+@v1.get("/health", tags=["test"])
 def health():
+    """
+    Check if the API is up and the model loaded correctly.
+
+    Returns:
+    - **status** - always `"ok, api is running"` if the server is reachable
+    - **model_loaded** - `true` if the model file was found and loaded on startup
+    - **model_path** - the path it looked for the model at
+    """
     return {
         "status": "ok, api is running",
         "model_loaded": model_bundle is not None,
@@ -86,8 +225,33 @@ def health():
     }
 
 
-@app.post("/predict", tags=["prediction"])
+@v1.post("/predictions", tags=["prediction"], status_code=201, response_model=PredictionResponse)
 def predict(payload: PredictRequest):
+    """
+    Classify a political statement as **real** or **fake**.
+
+    Send a statement plus any speaker metadata you have. The server handles all
+    the text preprocessing so you don't need to clean it yourself.
+
+    **Required:**
+    - `statement` - the claim to classify (1-5000 characters)
+
+    **Optional metadata** (helps accuracy if you have it):
+    - `subjects` - comma-separated topic tags (e.g. `"economy,jobs"`)
+    - `party` - speaker's party, case-insensitive (e.g. `"republican"`)
+    - `state` - U.S. state of the speaker (e.g. `"Texas"`)
+    - `speaker_job` - their job title at the time (e.g. `"President"`)
+    - `hist1`-`hist5` - how many times the speaker was previously rated:
+      barely-true, false, half-true, mostly-true, pants-fire
+
+    **Returns** a `PredictionResponse` with the label, per-class probabilities,
+    confidence score, and a flag if confidence is low.
+
+    **Errors:**
+    - `422` - bad input (blank statement, negative history count, etc.)
+    - `503` - model not loaded on the server
+    - `500` - something went wrong during inference
+    """
     if model_bundle is None:
         raise HTTPException(
             status_code=503,
@@ -121,12 +285,18 @@ def predict(payload: PredictRequest):
         ]
     )
 
-    x_text = model_bundle["vectorizer"].transform(frame["statement_clean"].fillna(""))
-    x_meta = transform_metadata(frame, model_bundle["transformers"])
-    x_all = hstack([x_text, x_meta], format="csr")
+    try:
+        x_text = model_bundle["vectorizer"].transform(frame["statement_clean"].fillna(""))
+        x_meta = transform_metadata(frame, model_bundle["transformers"])
+        x_all = hstack([x_text, x_meta], format="csr")
 
-    predicted_id = int(model_bundle["classifier"].predict(x_all)[0])
-    probabilities = model_bundle["classifier"].predict_proba(x_all)[0]
+        predicted_id = int(model_bundle["classifier"].predict(x_all)[0])
+        probabilities = model_bundle["classifier"].predict_proba(x_all)[0]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction failed due to an internal model error: {exc}",
+        ) from exc
 
     if label_encoder is not None:
         predicted_label = str(label_encoder.inverse_transform([predicted_id])[0])
@@ -141,10 +311,12 @@ def predict(payload: PredictRequest):
     confidence = max(class_probabilities.values()) if class_probabilities else 0.0
 
     return {
-        "predicted_id": predicted_id,
-        "predicted_label": predicted_label,
+        "label": predicted_label,
         "class_probabilities": class_probabilities,
         "confidence": confidence,
         "is_low_confidence": confidence < 0.60,
         "cleaned_statement": cleaned_statement,
     }
+
+
+app.include_router(v1)

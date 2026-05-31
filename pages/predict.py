@@ -74,7 +74,7 @@ if submitted:
 
         with st.spinner("Running inference…"):
             try:
-                resp = requests.post(f"{API_BASE_URL}/predict", json=payload, timeout=30)
+                resp = requests.post(f"{API_BASE_URL}/v1/predictions", json=payload, timeout=30)
                 resp.raise_for_status()
                 data = resp.json()
             except requests.exceptions.ConnectionError:
@@ -88,7 +88,7 @@ if submitted:
 
         confidence = data.get("confidence", 0)
         conf_pct = round(confidence * 100, 1)
-        label = data.get("predicted_label", "—")
+        label = data.get("label", "-")
 
         res_col, meter_col = st.columns([3, 1])
         with res_col:
