@@ -1,0 +1,15 @@
+pandas
+scikit-learn
+scipy
+joblib
+nltk
+matplotlib
+fastapi
+uvicorn[standard]
+pydantic
+httpx
+transformers
+accelerate
+torch
+streamlit
+requests

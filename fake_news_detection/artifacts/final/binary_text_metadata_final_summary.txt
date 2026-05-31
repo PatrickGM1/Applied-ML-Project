@@ -1,0 +1,11 @@
+dataset: binary_text_metadata_final
+label_column: label2_int
+train_rows: 7288
+test_rows: 802
+accuracy: 0.6870
+f1_macro: 0.6739
+labels: 0, 1
+unknown_subjects: nightlife, politifacts-top-promises
+
+confusion_matrix:
+[[195, 147], [104, 356]]

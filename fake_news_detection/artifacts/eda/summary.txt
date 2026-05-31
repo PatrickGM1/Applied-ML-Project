@@ -1,0 +1,33 @@
+Dataset summary (train)
+rows: 10269
+
+label counts:
+label
+half-true      2123
+false          1998
+mostly-true    1966
+true           1683
+barely-true    1657
+pants-fire      842
+
+binary label counts:
+label_binary
+NaN     3780
+real    3649
+fake    2840
+
+missing values:
+speaker_job     2902
+state           2211
+context          100
+label_binary    3780
+
+statement word count stats:
+count    10269.000000
+mean        17.906515
+std          7.752818
+min          2.000000
+25%         12.000000
+50%         17.000000
+75%         22.000000
+max         66.000000

@@ -1,0 +1,44 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fake_news_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./fake_news_detection/artifacts/models:/app/fake_news_detection/artifacts/models:ro
+      - ./fake_news_detection/artifacts/encoders:/app/fake_news_detection/artifacts/encoders:ro
+    networks:
+      - app-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: fake_news_streamlit
+    restart: unless-stopped
+    ports:
+      - "8502:8502"
+    environment:
+      - API_BASE_URL=http://backend:8000
+      - PUBLIC_BASE_URL=https://aml.guba.dev
+    depends_on:
+      - backend
+    networks:
+      - app-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  app-net:
+    driver: bridge

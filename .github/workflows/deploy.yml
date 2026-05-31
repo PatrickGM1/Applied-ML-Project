@@ -1,33 +1,57 @@
 name: Deploy aml.guba.dev
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH
+      - name: Install Docker on server (if missing)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            mkdir -p /var/www/html/aml_html
+            if ! command -v docker &> /dev/null; then
+              apt-get update -qq
+              apt-get install -y -qq docker.io docker-compose-plugin
+              systemctl enable docker
+              systemctl start docker
+              hash -r
+            fi
 
-            if [ ! -d "/var/www/html/aml_html/.git" ]; then
-              cd /var/www/html/aml_html
+      - name: Pull latest code
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GITHUB_REF_NAME,GITHUB_TOKEN
+          script: |
+            APP_DIR=/var/www/html/aml_html
+            mkdir -p $APP_DIR
+            git config --global --add safe.directory $APP_DIR
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              cd $APP_DIR
               git init
               git remote add origin https://github.com/PatrickGM1/Applied-ML-Project.git
             fi
 
-            git config --global --add safe.directory /var/www/html/aml_html
-
-            cd /var/www/html/aml_html
-            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/PatrickGM1/Applied-ML-Project.git
+            cd $APP_DIR
+            git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/PatrickGM1/Applied-ML-Project.git
             git fetch --all
-            git reset --hard origin/main
+            git reset --hard origin/${GITHUB_REF_NAME}
 
-            chown -R www-data:www-data /var/www/html/aml_html
-            chmod -R 755 /var/www/html/aml_html
+      - name: Deploy containers
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            docker compose -f /var/www/html/aml_html/docker-compose.yml down
+            docker image rm -f aml_html-frontend aml_html-backend 2>/dev/null || true
+            docker compose -f /var/www/html/aml_html/docker-compose.yml up --build -d
