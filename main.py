@@ -1,3 +1,4 @@
+import math
 import pickle
 from pathlib import Path
 
@@ -8,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from scipy.sparse import hstack
 
 from fake_news_detection.features.metadata import transform_metadata
@@ -66,7 +67,7 @@ def css():
 
 
 class PredictRequest(BaseModel):
-    statement: str
+    statement: str = Field(..., min_length=1, max_length=5000)
     subjects: str = ""
     party: str = "missing"
     state: str = "missing"
@@ -76,6 +77,22 @@ class PredictRequest(BaseModel):
     hist3: float = 0.0
     hist4: float = 0.0
     hist5: float = 0.0
+
+    @field_validator("statement")
+    @classmethod
+    def statement_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Statement must not be blank or whitespace only.")
+        return v
+
+    @field_validator("hist1", "hist2", "hist3", "hist4", "hist5")
+    @classmethod
+    def history_counts_valid(cls, v: float) -> float:
+        if not math.isfinite(v):
+            raise ValueError("History counts must be finite numbers.")
+        if v < 0:
+            raise ValueError("History counts must be non-negative.")
+        return v
 
 @app.get("/health", tags=["test"])
 def health():
@@ -121,12 +138,18 @@ def predict(payload: PredictRequest):
         ]
     )
 
-    x_text = model_bundle["vectorizer"].transform(frame["statement_clean"].fillna(""))
-    x_meta = transform_metadata(frame, model_bundle["transformers"])
-    x_all = hstack([x_text, x_meta], format="csr")
+    try:
+        x_text = model_bundle["vectorizer"].transform(frame["statement_clean"].fillna(""))
+        x_meta = transform_metadata(frame, model_bundle["transformers"])
+        x_all = hstack([x_text, x_meta], format="csr")
 
-    predicted_id = int(model_bundle["classifier"].predict(x_all)[0])
-    probabilities = model_bundle["classifier"].predict_proba(x_all)[0]
+        predicted_id = int(model_bundle["classifier"].predict(x_all)[0])
+        probabilities = model_bundle["classifier"].predict_proba(x_all)[0]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction failed due to an internal model error: {exc}",
+        ) from exc
 
     if label_encoder is not None:
         predicted_label = str(label_encoder.inverse_transform([predicted_id])[0])
