@@ -22,6 +22,7 @@ Run:
     python fake_news_detection/scripts/bert_text_only.py
 """
 
+import copy
 import json
 import os
 from pathlib import Path
@@ -38,6 +39,7 @@ from sklearn.metrics import (
     confusion_matrix,
     f1_score,
 )
+from sklearn.utils.class_weight import compute_class_weight
 
 # DataLoader groups many Dataset items into mini-batches for training.
 from torch.utils.data import Dataset, DataLoader
@@ -86,12 +88,12 @@ MAX_LENGTH   = 128          # Max nr of BERT tokens per statement. Longer texts 
                             # shorter texts are padded to exactly this length.
 RANDOM_SEED  = 42
 BATCH_SIZE   = 16
-NUM_EPOCHS   = 3
-LEARNING_RATE = 2e-5
-LEARNING_RATES    = [1e-5, 2e-5, 5e-5]   # LR candidates for the search phase
+NUM_EPOCHS   = 5
+LEARNING_RATE = 1e-5
+LEARNING_RATES    = [1e-5, 2e-5, 5e-5]   # LR candidates for the search phase (unused — best LR hardcoded above)
 LOG_EVERY_N_STEPS   = 50                   # print training loss every N gradient steps
 FREEZE_EPOCHS      = 1                    # epochs to train head-only (BERT encoder frozen)
-UNFREEZE_LR_FACTOR = 1.0                  # LR multiplier when unfreezing BERT (1.0 = keep the searched fine-tuning LR)
+UNFREEZE_LR_FACTOR = 1.0                  # LR multiplier when unfreezing BERT (1e-5 is already conservative, no reduction needed)
 WEIGHT_DECAY  = 0.01         # Regularization term that discourages overly large weights
 WARMUP_RATIO  = 0.1          # fraction of total steps used for LR warm-up
 DROPOUT_RATE  = 0.3          # helps reduce overfitting in the classifier/fusion head
@@ -426,8 +428,9 @@ def run_experiment(name: str, config: dict, lr: float = LEARNING_RATE) -> dict:
     print(f"{'='*60}")
 
     # --- Load data ---
-    # Train on the dedicated train split only so the validation split can be
-    # used to track val_loss each epoch (point 2).  The test set stays held out.
+    # Train on train split only so val_file is a clean, unseen monitor signal.
+    # Early stopping uses val_loss to decide when to stop — this only works if
+    # val data was never seen during training.
     train_df = pd.read_csv(CLEANED_TEXT_DIR / config["train_files"][0])
     val_df   = pd.read_csv(CLEANED_TEXT_DIR / config["val_file"])
     test_df  = pd.read_csv(CLEANED_TEXT_DIR / config["test_file"])
@@ -500,7 +503,17 @@ def run_experiment(name: str, config: dict, lr: float = LEARNING_RATE) -> dict:
         num_labels=num_labels,
     ).to(device)
 
-    criterion = nn.CrossEntropyLoss()
+    # Class weights only for multiclass — binary is balanced so weighting hurts accuracy.
+    train_labels = train_df[label_column].astype(int).values
+    if num_labels > 2:
+        class_weights = compute_class_weight(
+            "balanced", classes=np.unique(train_labels), y=train_labels
+        )
+        criterion = nn.CrossEntropyLoss(
+            weight=torch.tensor(class_weights, dtype=torch.float32).to(device)
+        )
+    else:
+        criterion = nn.CrossEntropyLoss()
 
     # --- Phase 1: train head only (BERT encoder frozen) ---
     # Freezing BERT lets the new classifier head reach a stable starting point
@@ -519,6 +532,9 @@ def run_experiment(name: str, config: dict, lr: float = LEARNING_RATE) -> dict:
         num_training_steps=total_steps_p1,
     )
 
+    best_val_loss = float("inf")
+    best_state    = None
+
     for epoch in range(1, FREEZE_EPOCHS + 1):
         avg_train, _ = train_one_epoch(
             model, train_loader, optimizer_p1, scheduler_p1, device, criterion,
@@ -526,13 +542,16 @@ def run_experiment(name: str, config: dict, lr: float = LEARNING_RATE) -> dict:
         )
         v_loss = eval_loss(model, val_loader, device, criterion)
         print(f"  [frozen]   Epoch {epoch}/{FREEZE_EPOCHS}  avg_train_loss={avg_train:.4f}  val_loss={v_loss:.4f}")
+        if v_loss < best_val_loss:
+            best_val_loss = v_loss
+            best_state    = copy.deepcopy(model.state_dict())
 
-    # --- Phase 2: unfreeze BERT and fine-tune all layers with a lower LR ---
-    # A reduced LR prevents large weight updates from destabilising the pretrained
-    # representations now that the head is initialised (point 3).
+    # --- Phase 2: unfreeze BERT and fine-tune all layers ---
+    # Early stopping (patience=2) saves the best weights and restores them after
+    # training ends or stops early — prevents overfitting on longer runs.
     unfreeze_lr      = lr * UNFREEZE_LR_FACTOR
     remaining_epochs = NUM_EPOCHS - FREEZE_EPOCHS
-    print(f"\n  [Phase 2] Unfreezing BERT — fine-tuning all layers for {remaining_epochs} epoch(s)  lr={unfreeze_lr:.0e}")
+    print(f"\n  [Phase 2] Unfreezing BERT — fine-tuning all layers for up to {remaining_epochs} epoch(s)  lr={unfreeze_lr:.0e}")
     for param in model.bert.parameters():
         param.requires_grad = True
 
@@ -545,6 +564,9 @@ def run_experiment(name: str, config: dict, lr: float = LEARNING_RATE) -> dict:
         num_training_steps=total_steps_p2,
     )
 
+    patience   = 2
+    no_improve = 0
+
     for epoch in range(FREEZE_EPOCHS + 1, NUM_EPOCHS + 1):
         avg_train, _ = train_one_epoch(
             model, train_loader, optimizer_p2, scheduler_p2, device, criterion,
@@ -552,6 +574,19 @@ def run_experiment(name: str, config: dict, lr: float = LEARNING_RATE) -> dict:
         )
         v_loss = eval_loss(model, val_loader, device, criterion)
         print(f"  [unfrozen] Epoch {epoch}/{NUM_EPOCHS}  avg_train_loss={avg_train:.4f}  val_loss={v_loss:.4f}")
+
+        if v_loss < best_val_loss:
+            best_val_loss = v_loss
+            best_state    = copy.deepcopy(model.state_dict())
+            no_improve    = 0
+        else:
+            no_improve += 1
+            if no_improve >= patience:
+                print(f"  Early stopping at epoch {epoch} (no val_loss improvement for {patience} epochs)")
+                break
+
+    print(f"  Restoring best weights (val_loss={best_val_loss:.4f})")
+    model.load_state_dict(best_state)
 
     # --- Final evaluation on held-out test set ---
     # Important: the test set is not used during training. It is used once here.
@@ -647,13 +682,8 @@ def main():
     else:
         print("CUDA: no  (training will be slow on CPU)")
 
-    best_lrs = {
-        name: run_lr_search(name, config)
-        for name, config in EXPERIMENTS.items()
-    }
-
     results = {
-        name: run_experiment(name, config, lr=best_lrs[name])
+        name: run_experiment(name, config, lr=LEARNING_RATE)
         for name, config in EXPERIMENTS.items()
     }
 
