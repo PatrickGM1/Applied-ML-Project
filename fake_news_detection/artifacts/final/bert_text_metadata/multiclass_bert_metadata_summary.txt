@@ -3,14 +3,14 @@ model_name: bert-base-uncased
 text_column: statement
 label_column: label6_int
 num_labels: 6
-meta_dim: 9441
+meta_dim: 8718
 max_length: 128
-train_rows: 11553
+train_rows: 10269
 eval_rows: 1283
-accuracy: 0.2806
-f1_macro: 0.2705
-f1_weighted: 0.2756
+accuracy: 0.2751
+f1_macro: 0.2636
+f1_weighted: 0.2520
 labels: 0, 1, 2, 3, 4, 5
 
 confusion_matrix:
-[[31, 45, 78, 33, 7, 20], [25, 80, 54, 44, 7, 40], [20, 52, 77, 74, 6, 38], [10, 22, 79, 94, 3, 41], [12, 35, 15, 9, 16, 5], [5, 21, 46, 73, 4, 62]]
+[[59, 10, 37, 20, 32, 56], [45, 35, 32, 15, 35, 88], [41, 19, 67, 20, 33, 87], [35, 6, 53, 23, 18, 114], [15, 6, 9, 2, 45, 15], [24, 7, 20, 22, 14, 124]]

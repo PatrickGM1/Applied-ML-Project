@@ -1,5 +1,6 @@
-fake_news_detection/artifacts/models/
-fake_news_detection/artifacts/encoders/
+fake_news_detection/artifacts/models/bert_text_only/
+fake_news_detection/artifacts/models/multiclass_text_metadata_final.joblib
+fake_news_detection/artifacts/encoders/label_encoder_6.pkl
 fake_news_detection/data/raw/
 fake_news_detection/data/processed/
 __pycache__/

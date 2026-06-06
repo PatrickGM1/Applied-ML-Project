@@ -1,0 +1,10 @@
+dataset: binary_tfidf_meta_no_hist
+train_rows: 6489
+eval_rows: 802
+accuracy: 0.6633
+f1_macro: 0.6501
+f1_weighted: 0.6601
+labels: 0, 1
+
+confusion_matrix:
+[[188, 154], [116, 344]]

@@ -1,0 +1,49 @@
+{
+  "dataset": "binary_tfidf_meta_no_hist",
+  "train_rows": 6489,
+  "eval_rows": 802,
+  "accuracy": 0.6633416458852868,
+  "f1_macro": 0.6501030914508426,
+  "f1_weighted": 0.6601168698051016,
+  "labels": [
+    "0",
+    "1"
+  ],
+  "confusion_matrix": [
+    [
+      188,
+      154
+    ],
+    [
+      116,
+      344
+    ]
+  ],
+  "classification_report": {
+    "0": {
+      "precision": 0.618421052631579,
+      "recall": 0.5497076023391813,
+      "f1-score": 0.5820433436532507,
+      "support": 342.0
+    },
+    "1": {
+      "precision": 0.6907630522088354,
+      "recall": 0.7478260869565218,
+      "f1-score": 0.7181628392484343,
+      "support": 460.0
+    },
+    "accuracy": 0.6633416458852868,
+    "macro avg": {
+      "precision": 0.6545920524202071,
+      "recall": 0.6487668446478515,
+      "f1-score": 0.6501030914508426,
+      "support": 802.0
+    },
+    "weighted avg": {
+      "precision": 0.6599139700948432,
+      "recall": 0.6633416458852868,
+      "f1-score": 0.6601168698051016,
+      "support": 802.0
+    }
+  }
+}
