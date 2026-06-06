@@ -5,58 +5,7 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", API_BASE_URL)
 
 st.markdown(
-    """
-    <style>
-    /* Model card buttons */
-    div[data-testid="stColumn"] .stButton > button {
-        background: #141414 !important;
-        border: 1px solid #222 !important;
-        border-left: 3px solid #7c6af7 !important;
-        border-radius: 10px !important;
-        padding: 1rem 1.2rem !important;
-        text-align: left !important;
-        min-height: 80px !important;
-        transition: all .2s ease !important;
-    }
-    div[data-testid="stColumn"] .stButton > button:hover {
-        border-color: #7c6af7 !important;
-        background: rgba(124, 106, 247, 0.08) !important;
-        box-shadow: 0 0 16px rgba(124, 106, 247, 0.1) !important;
-    }
-    div[data-testid="stColumn"] .stButton > button p {
-        text-align: left !important;
-    }
-    div[data-testid="stColumn"] .stButton > button p:first-child {
-        font-weight: 600 !important;
-        font-size: 0.95rem !important;
-        color: #e8e8e8 !important;
-        margin-bottom: 4px !important;
-    }
-    div[data-testid="stColumn"] .stButton > button p:last-child {
-        font-weight: 400 !important;
-        font-size: 0.78rem !important;
-        color: #666 !important;
-    }
-    /* API link buttons */
-    .stLinkButton > a {
-        background: #141414 !important;
-        border: 1px solid #222 !important;
-        border-radius: 8px !important;
-        color: #aaa !important;
-        font-size: 0.82rem !important;
-        font-weight: 500 !important;
-        padding: 0.55rem 1rem !important;
-        transition: all .2s ease !important;
-    }
-    .stLinkButton > a:hover {
-        border-color: #7c6af7 !important;
-        color: #e8e8e8 !important;
-        background: rgba(124, 106, 247, 0.08) !important;
-        box-shadow: 0 0 12px rgba(124, 106, 247, 0.1) !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
+    "Fake News Detection -> [LIAR Dataset](https://www.kaggle.com/datasets/doanquanvietnamca/liar-dataset)"
 )
 
 st.markdown(
