@@ -19,8 +19,9 @@ build/
 
 # OS
 Thumbs.db
-# Large training artifacts / model weights (tracked via Git LFS)
+# Large training artifacts / model weights
 fake_news_detection/artifacts/models/bert_text_only/
 fake_news_detection/artifacts/final/_tmp/
 *.safetensors
 *.bin
+*.pt
