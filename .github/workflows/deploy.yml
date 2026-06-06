@@ -4,7 +4,27 @@ on:
     branches: [main, develop, bert]
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --no-cache-dir \
+            pandas scikit-learn scipy joblib nltk \
+            fastapi "uvicorn[standard]" pydantic httpx \
+            pytest numpy
+
+      - name: Run tests
+        run: pytest tests/ -v
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Install Docker on server (if missing)

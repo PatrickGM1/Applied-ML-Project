@@ -35,7 +35,7 @@ if ENCODER_PATH.exists():
         label_encoder = pickle.load(file_handle)
 
 # --- Load BERT model if available ---
-if (BERT_MODEL_DIR / "serving_config.json").exists():
+if (BERT_MODEL_DIR / "serving_config.json").exists() and (BERT_MODEL_DIR / "model_weights.pt").exists():
     import torch
     import torch.nn as nn
     from transformers import AutoModel, AutoTokenizer
