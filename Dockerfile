@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir \
     pandas scikit-learn scipy joblib nltk \
     fastapi "uvicorn[standard]" pydantic httpx \
     transformers accelerate \
-    torch --index-url https://download.pytorch.org/whl/cpu
+ && pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
 # Copy source (dockerignore keeps this fast)
 COPY . .
