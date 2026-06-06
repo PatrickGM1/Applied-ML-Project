@@ -101,14 +101,43 @@ st.markdown(
 
     /* Alerts / warnings */
     .stAlert { background: var(--surface) !important; border-color: var(--border) !important; }
+
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: var(--surface) !important;
+        border-right: 1px solid var(--border) !important;
+        min-width: 180px !important;
+        max-width: 220px !important;
+        width: 200px !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stSidebarNav"] {
+        padding-top: 1rem;
+    }
+    [data-testid="stSidebar"] [data-testid="stSidebarNav"] li {
+        margin: 0 !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stSidebarNav"] a {
+        font-size: 0.85rem !important;
+        padding: 0.4rem 0.8rem !important;
+        color: var(--muted) !important;
+        border-radius: 6px;
+    }
+    [data-testid="stSidebar"] [data-testid="stSidebarNav"] a[aria-current="page"],
+    [data-testid="stSidebar"] [data-testid="stSidebarNav"] a:hover {
+        color: var(--text) !important;
+        background: var(--accent-dim) !important;
+    }
+    [data-testid="stSidebarCollapseButton"] {
+        color: var(--muted) !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 home = st.Page("pages/home.py", title="Home", icon=":material/home:")
-predict = st.Page("pages/predict.py", title="Demo", icon=":material/search:")
-final = st.Page("pages/final.py", title="Final Model", icon=":material/model_training:")
+predict = st.Page("pages/predict.py", title="Base Model", icon=":material/search:")
+final = st.Page("pages/final.py", title="BERT Model", icon=":material/model_training:")
 
-pg = st.navigation([home, predict, final], position="hidden")
+pg = st.navigation([home, predict, final])
 pg.run()

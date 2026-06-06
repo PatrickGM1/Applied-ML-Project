@@ -26,9 +26,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if st.button("← Home"):
-    st.switch_page("pages/home.py")
-
 st.markdown("## Base Model")
 st.caption("Enter a political claim and optional speaker metadata.")
 st.divider()

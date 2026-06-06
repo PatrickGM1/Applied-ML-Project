@@ -26,10 +26,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if st.button("← Home"):
-    st.switch_page("pages/home.py")
-
-st.markdown("## Final Model")
+st.markdown("## BERT Model")
 st.caption("BERT + Metadata Fusion")
 st.divider()
 
