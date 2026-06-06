@@ -1,0 +1,8 @@
+{
+  "model_name": "bert-base-uncased",
+  "num_labels": 2,
+  "meta_dim": 6424,
+  "max_length": 128,
+  "hidden_dim": 256,
+  "dropout_rate": 0.3
+}

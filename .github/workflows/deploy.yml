@@ -1,7 +1,7 @@
 name: Deploy aml.guba.dev
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, bert]
 
 jobs:
   deploy:
