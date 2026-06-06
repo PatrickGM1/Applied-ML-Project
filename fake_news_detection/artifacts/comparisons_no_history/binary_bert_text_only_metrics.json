@@ -1,0 +1,49 @@
+{
+  "dataset": "binary_bert_text_only",
+  "train_rows": 6489,
+  "eval_rows": 802,
+  "accuracy": 0.6807980049875312,
+  "f1_macro": 0.6689050153201097,
+  "f1_weighted": 0.6781377309829764,
+  "labels": [
+    "0",
+    "1"
+  ],
+  "confusion_matrix": [
+    [
+      197,
+      145
+    ],
+    [
+      111,
+      349
+    ]
+  ],
+  "classification_report": {
+    "0": {
+      "precision": 0.6396103896103896,
+      "recall": 0.5760233918128655,
+      "f1-score": 0.6061538461538462,
+      "support": 342.0
+    },
+    "1": {
+      "precision": 0.7064777327935222,
+      "recall": 0.758695652173913,
+      "f1-score": 0.7316561844863732,
+      "support": 460.0
+    },
+    "accuracy": 0.6807980049875312,
+    "macro avg": {
+      "precision": 0.6730440612019559,
+      "recall": 0.6673595219933892,
+      "f1-score": 0.6689050153201097,
+      "support": 802.0
+    },
+    "weighted avg": {
+      "precision": 0.6779632298401165,
+      "recall": 0.6807980049875312,
+      "f1-score": 0.6781377309829764,
+      "support": 802.0
+    }
+  }
+}

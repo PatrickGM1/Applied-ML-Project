@@ -1,40 +1,124 @@
-import base64
 import os
-
+import requests
 import streamlit as st
+
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+
+st.markdown(
+    """
+    <style>
+    .prob-row {
+        display: flex; align-items: center; gap: 10px;
+        margin-bottom: 6px; font-size: 0.9rem;
+    }
+    .prob-label { width: 110px; text-align: right; color: #888; }
+    .prob-label.top { color: #e8e8e8; font-weight: 600; }
+    .prob-bar-track {
+        flex: 1; height: 6px; background: #2a2a2a;
+        border-radius: 999px; overflow: hidden;
+    }
+    .prob-bar-fill { height: 100%; background: #7c6af7; border-radius: 999px; }
+    .prob-bar-fill.top { box-shadow: 0 0 6px rgba(124,106,247,0.6); }
+    .prob-value { width: 48px; text-align: right; color: #888; font-variant-numeric: tabular-nums; }
+    .prob-value.top { color: #e8e8e8; font-weight: 600; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 if st.button("← Home"):
     st.switch_page("pages/home.py")
 
-st.divider()
-
 st.markdown("## Final Model")
-st.caption("BERT")
-
+st.caption("BERT + Metadata Fusion")
 st.divider()
 
-_img_path = "pages/sign.jpg"
-_img_b64 = ""
-if os.path.exists(_img_path):
-    with open(_img_path, "rb") as _f:
-        _img_b64 = base64.b64encode(_f.read()).decode()
+with st.form("bert_predict_form"):
+    statement = st.text_area("Claim text", placeholder="Enter a political claim…", height=120)
 
-st.markdown(
-    f"""
-    <div style="text-align:center; padding: 48px 0 32px;">
-        {"" if not _img_b64 else f'<img src="data:image/jpeg;base64,{_img_b64}" style="width:160px; border-radius:10px; margin-bottom:16px;" />'}
-        <h3 style="color:#e8e8e8; margin-bottom:8px;">Work in progress</h3>
-        <p style="color:#888; font-size:0.9rem; max-width:360px; margin:0 auto 24px;">
-            The final model is being trained, evaluated, and very dramatically
-            prepared for its grand arrival.
-        </p>
-        <p style="color:#7c6af7; font-size:0.8rem; font-weight:600; letter-spacing:0.05em;">
-            ARRIVING SOON™ (Hopefully)
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+    col1, col2 = st.columns(2)
+    with col1:
+        subjects = st.text_input("Subjects (comma-separated)", placeholder="economy,budget")
+        speaker = st.text_input("Speaker", placeholder="barack-obama")
+        state = st.text_input("State", placeholder="texas")
+    with col2:
+        party = st.text_input("Party", placeholder="republican")
+        speaker_job = st.text_input("Speaker job", placeholder="senator")
+        context = st.text_input("Context", placeholder="a speech")
+
+    submitted = st.form_submit_button("Predict", use_container_width=True)
+
+if submitted:
+    if not statement.strip():
+        st.error("Claim text is required.")
+    else:
+        def normalize(v):
+            return v.strip() if v and v.strip() else "unknown"
+
+        payload = {
+            "statement": statement.strip(),
+            "subjects": subjects.strip(),
+            "speaker": normalize(speaker),
+            "party": normalize(party),
+            "state": normalize(state),
+            "speaker_job": normalize(speaker_job),
+            "context": normalize(context),
+        }
+
+        with st.spinner("Running BERT inference…"):
+            try:
+                resp = requests.post(f"{API_BASE_URL}/v2/predictions", json=payload, timeout=60)
+                resp.raise_for_status()
+                data = resp.json()
+            except requests.exceptions.ConnectionError:
+                st.error(f"Could not reach the API at `{API_BASE_URL}`. Make sure the backend is running.")
+                st.stop()
+            except requests.exceptions.HTTPError as exc:
+                detail = exc.response.json().get("detail", str(exc)) if exc.response else str(exc)
+                st.error(f"API error: {detail}")
+                st.stop()
+
+        st.divider()
+
+        confidence = data.get("confidence", 0)
+        conf_pct = round(confidence * 100, 1)
+        label = data.get("label", "-")
+
+        res_col, meter_col = st.columns([3, 1])
+        with res_col:
+            st.markdown(f"### {label.capitalize()}")
+            st.caption(f"Confidence: **{conf_pct}%**")
+        with meter_col:
+            color = "#4ade80" if conf_pct >= 75 else "#facc15" if conf_pct >= 60 else "#f87171"
+            st.markdown(
+                f"""<div style="text-align:center;padding-top:8px">
+                <svg viewBox="0 0 36 36" width="64" height="64">
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#222" stroke-width="3"/>
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="{color}" stroke-width="3"
+                        stroke-dasharray="{conf_pct:.1f} 100" stroke-linecap="round"
+                        transform="rotate(-90 18 18)"/>
+                </svg>
+                <div style="font-size:.75rem;font-weight:700;color:{color}">{conf_pct}%</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
+        if data.get("is_low_confidence"):
+            st.warning("Low confidence — treat this as a weak signal, not a verdict.")
+
+        st.markdown("**Class probabilities**")
+        probs = sorted(data.get("class_probabilities", {}).items(), key=lambda x: x[1], reverse=True)
+        bars = ""
+        for lbl, val in probs:
+            pct = val * 100
+            top = lbl == label
+            tc = " top" if top else ""
+            bars += f"""<div class="prob-row">
+                <span class="prob-label{tc}">{lbl}</span>
+                <div class="prob-bar-track"><div class="prob-bar-fill{tc}" style="width:{pct:.1f}%"></div></div>
+                <span class="prob-value{tc}">{pct:.1f}%</span>
+            </div>"""
+        st.markdown(bars, unsafe_allow_html=True)
 
 st.divider()
 st.caption("© 2026 [guba.dev](https://guba.dev)")

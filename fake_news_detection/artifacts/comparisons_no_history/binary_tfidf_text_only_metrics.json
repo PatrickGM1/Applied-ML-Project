@@ -1,0 +1,49 @@
+{
+  "dataset": "binary_tfidf_text_only",
+  "train_rows": 6489,
+  "eval_rows": 802,
+  "accuracy": 0.6321695760598504,
+  "f1_macro": 0.605369602167056,
+  "f1_weighted": 0.6205006879055714,
+  "labels": [
+    "0",
+    "1"
+  ],
+  "confusion_matrix": [
+    [
+      149,
+      193
+    ],
+    [
+      102,
+      358
+    ]
+  ],
+  "classification_report": {
+    "0": {
+      "precision": 0.5936254980079682,
+      "recall": 0.43567251461988304,
+      "f1-score": 0.5025295109612141,
+      "support": 342.0
+    },
+    "1": {
+      "precision": 0.6497277676950998,
+      "recall": 0.7782608695652173,
+      "f1-score": 0.7082096933728981,
+      "support": 460.0
+    },
+    "accuracy": 0.6321695760598504,
+    "macro avg": {
+      "precision": 0.621676632851534,
+      "recall": 0.6069666920925502,
+      "f1-score": 0.605369602167056,
+      "support": 802.0
+    },
+    "weighted avg": {
+      "precision": 0.6258038571801384,
+      "recall": 0.6321695760598504,
+      "f1-score": 0.6205006879055714,
+      "support": 802.0
+    }
+  }
+}

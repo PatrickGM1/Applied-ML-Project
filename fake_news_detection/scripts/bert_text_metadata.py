@@ -46,6 +46,7 @@ Run:
 import copy
 import json
 import os
+import pickle
 from pathlib import Path
 
 import numpy as np
@@ -785,11 +786,25 @@ def run_experiment(name: str, config: dict, lr: float = LEARNING_RATE) -> dict:
     # --- Save metrics ---
     _save_results(name, metrics)
 
-    # --- Save model weights ---
+    # --- Save model weights + serving artifacts ---
     model_dir = MODELS_DIR / name
     model_dir.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), model_dir / "model_weights.pt")
     tokenizer.save_pretrained(str(model_dir))
+
+    with open(model_dir / "meta_transformers.pkl", "wb") as fh:
+        pickle.dump(meta_transformers, fh)
+
+    serving_config = {
+        "model_name": MODEL_NAME,
+        "num_labels": int(num_labels),
+        "meta_dim": int(meta_dim),
+        "max_length": int(MAX_LENGTH),
+        "hidden_dim": int(HIDDEN_DIM),
+        "dropout_rate": float(DROPOUT_RATE),
+    }
+    with open(model_dir / "serving_config.json", "w", encoding="utf-8") as fh:
+        json.dump(serving_config, fh, indent=2)
 
     return metrics
 

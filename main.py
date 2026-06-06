@@ -1,8 +1,10 @@
+import json
 import math
 import pickle
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,8 +21,11 @@ BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "fake_news_detection" / "artifacts" / "models" / "binary_text_metadata_final.joblib"
 ENCODER_PATH = BASE_DIR / "fake_news_detection" / "artifacts" / "encoders" / "label_encoder_2.pkl"
 
+BERT_MODEL_DIR = BASE_DIR / "fake_news_detection" / "artifacts" / "models" / "bert_text_metadata" / "binary_bert_metadata"
+
 model_bundle = None
 label_encoder = None
+bert_bundle = None
 
 if MODEL_PATH.exists():
     model_bundle = joblib.load(MODEL_PATH)
@@ -29,29 +34,88 @@ if ENCODER_PATH.exists():
     with open(ENCODER_PATH, "rb") as file_handle:
         label_encoder = pickle.load(file_handle)
 
+# --- Load BERT model if available ---
+if (BERT_MODEL_DIR / "serving_config.json").exists():
+    import torch
+    import torch.nn as nn
+    from transformers import AutoModel, AutoTokenizer
+
+    with open(BERT_MODEL_DIR / "serving_config.json", encoding="utf-8") as _fh:
+        _bert_cfg = json.load(_fh)
+
+    class _BertMetadataFusion(nn.Module):
+        def __init__(self, bert_model_name, meta_dim, num_labels, hidden_dim, dropout_rate):
+            super().__init__()
+            self.bert = AutoModel.from_pretrained(bert_model_name)
+            bert_dim = self.bert.config.hidden_size
+            self.fusion_head = nn.Sequential(
+                nn.Linear(bert_dim + meta_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(dropout_rate),
+                nn.Linear(hidden_dim, num_labels),
+            )
+
+        def forward(self, input_ids, attention_mask, token_type_ids, metadata):
+            outputs = self.bert(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+            )
+            cls_embedding = outputs.last_hidden_state[:, 0, :]
+            fused = torch.cat([cls_embedding, metadata], dim=-1)
+            return self.fusion_head(fused)
+
+    _bert_model = _BertMetadataFusion(
+        bert_model_name=_bert_cfg["model_name"],
+        meta_dim=_bert_cfg["meta_dim"],
+        num_labels=_bert_cfg["num_labels"],
+        hidden_dim=_bert_cfg["hidden_dim"],
+        dropout_rate=_bert_cfg["dropout_rate"],
+    )
+    _bert_model.load_state_dict(
+        torch.load(BERT_MODEL_DIR / "model_weights.pt", map_location="cpu", weights_only=True)
+    )
+    _bert_model.eval()
+
+    _bert_tokenizer = AutoTokenizer.from_pretrained(str(BERT_MODEL_DIR))
+
+    with open(BERT_MODEL_DIR / "meta_transformers.pkl", "rb") as _fh:
+        _bert_meta_transformers = pickle.load(_fh)
+
+    _bert_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    _bert_model.to(_bert_device)
+
+    bert_bundle = {
+        "model": _bert_model,
+        "tokenizer": _bert_tokenizer,
+        "meta_transformers": _bert_meta_transformers,
+        "config": _bert_cfg,
+        "device": _bert_device,
+    }
+    print(f"BERT model loaded from {BERT_MODEL_DIR} (device: {_bert_device})")
+
 ensure_nltk_resources()
 STOP_WORDS = set(stopwords.words("english"))
 LEMMATIZER = WordNetLemmatizer()
 
 app = FastAPI(
     title="Fake News Detection API",
-    version="1.0.0",
-    description="""Classifies political statements as **real** or **fake** using a
-TF-IDF + logistic regression model trained on the
-[LIAR dataset](https://www.kaggle.com/datasets/doanquanvietnamca/liar-dataset)
+    version="2.0.0",
+    description="""Classifies political statements as **real** or **fake** using models
+trained on the [LIAR dataset](https://www.kaggle.com/datasets/doanquanvietnamca/liar-dataset)
 (~12 000 PolitiFact fact-checks).
 
 **Binary labels:**
 - `real` - originally rated *true*, *mostly-true*, or *half-true*
 - `fake` - originally rated *false*, *barely-true*, or *pants-fire*
 
-The model uses TF-IDF bag-of-words features plus optional speaker metadata
-(party, state, job title, and how many times the speaker has been rated in each
-category before). Text preprocessing is done on the server so just send the
-raw statement as-is.""",
+**Two model versions:**
+- **v1** — TF-IDF + Logistic Regression baseline (text + metadata + speaker history)
+- **v2** — BERT + Metadata Fusion (text + metadata, no speaker history)""",
     openapi_tags=[
-        {"name": "test", "description": "Health check endpoint"},
-        {"name": "prediction", "description": "Model inference endpoint"},
+        {"name": "health", "description": "Health check endpoints"},
+        {"name": "v1 - baseline", "description": "TF-IDF + Logistic Regression (text + metadata + history)"},
+        {"name": "v2 - bert", "description": "BERT + Metadata Fusion (text + metadata, no history)"},
     ],
 )
 
@@ -79,9 +143,42 @@ def css():
     return FileResponse(BASE_DIR / "style.css", media_type="text/css")
 
 
-class PredictRequest(BaseModel):
+# ---------------------------------------------------------------------------
+# Shared schemas
+# ---------------------------------------------------------------------------
+
+class PredictionResponse(BaseModel):
+    """What you get back after classifying a statement."""
+
+    label: str = Field(
+        description="Predicted label: either `real` or `fake`.",
+        examples=["fake"],
+    )
+    class_probabilities: dict[str, float] = Field(
+        description="Probability for each class. Keys are the label strings, values sum to 1.0.",
+        examples=[{"fake": 0.73, "real": 0.27}],
+    )
+    confidence: float = Field(
+        description="Probability of the winning class, same as max(class_probabilities). Between 0 and 1.",
+        examples=[0.73],
+    )
+    is_low_confidence: bool = Field(
+        description="True when confidence is below 0.60.",
+        examples=[False],
+    )
+    cleaned_statement: str = Field(
+        description="The statement after preprocessing.",
+        examples=["economy grow last quarter administration"],
+    )
+
+
+# ===================================================================
+#  V1 — TF-IDF + Logistic Regression baseline
+# ===================================================================
+
+class V1PredictRequest(BaseModel):
     """
-    Input for the fake-news classifier.
+    Input for the TF-IDF baseline classifier.
 
     Only `statement` is required. All other fields are optional and default to
     neutral/missing values, but adding speaker metadata usually helps accuracy.
@@ -91,66 +188,34 @@ class PredictRequest(BaseModel):
         ...,
         min_length=1,
         max_length=5000,
-        description="The raw political statement or claim to classify. "
-        "Text is preprocessed server-side (lowercased, punctuation removed, "
-        "stopwords filtered, lemmatized) so just send it as-is.",
+        description="The raw political statement or claim to classify.",
         examples=["The economy grew by 3% last quarter under my administration."],
     )
     subjects: str = Field(
         default="",
-        description="Comma-separated topic tags for the statement (e.g. 'economy,jobs'). "
-        "Leave blank if unknown.",
+        description="Comma-separated topic tags (e.g. 'economy,jobs').",
         examples=["economy,jobs"],
     )
     party: str = Field(
         default="missing",
-        description="Political party affiliation of the speaker "
-        "(e.g. 'democrat', 'republican', 'none'). "
-        "Gets lowercased automatically.",
+        description="Political party of the speaker.",
         examples=["republican"],
     )
     state: str = Field(
         default="missing",
-        description="U.S. state associated with the speaker at the time of the statement "
-        "(e.g. 'Texas', 'Illinois'). Use 'missing' if unknown.",
+        description="U.S. state of the speaker.",
         examples=["Texas"],
     )
     speaker_job: str = Field(
         default="missing",
-        description="Job title of the speaker at the time of the statement "
-        "(e.g. 'President', 'State senator'). Use 'missing' if unknown.",
+        description="Job title of the speaker.",
         examples=["President"],
     )
-    hist1: float = Field(
-        default=0.0,
-        ge=0,
-        description="Speaker's cumulative count of past statements rated 'barely true'.",
-        examples=[3],
-    )
-    hist2: float = Field(
-        default=0.0,
-        ge=0,
-        description="Speaker's cumulative count of past statements rated 'false'.",
-        examples=[7],
-    )
-    hist3: float = Field(
-        default=0.0,
-        ge=0,
-        description="Speaker's cumulative count of past statements rated 'half true'.",
-        examples=[5],
-    )
-    hist4: float = Field(
-        default=0.0,
-        ge=0,
-        description="Speaker's cumulative count of past statements rated 'mostly true'.",
-        examples=[10],
-    )
-    hist5: float = Field(
-        default=0.0,
-        ge=0,
-        description="Speaker's cumulative count of past statements rated 'pants on fire'.",
-        examples=[1],
-    )
+    hist1: float = Field(default=0.0, ge=0, description="Past 'barely true' count.", examples=[3])
+    hist2: float = Field(default=0.0, ge=0, description="Past 'false' count.", examples=[7])
+    hist3: float = Field(default=0.0, ge=0, description="Past 'half true' count.", examples=[5])
+    hist4: float = Field(default=0.0, ge=0, description="Past 'mostly true' count.", examples=[10])
+    hist5: float = Field(default=0.0, ge=0, description="Past 'pants on fire' count.", examples=[1])
 
     @field_validator("statement")
     @classmethod
@@ -180,44 +245,12 @@ class PredictRequest(BaseModel):
         return v
 
 
-class PredictionResponse(BaseModel):
-    """What you get back after classifying a statement."""
-
-    label: str = Field(
-        description="Predicted label: either `real` (true/mostly-true/half-true) "
-        "or `fake` (false/barely-true/pants-fire).",
-        examples=["fake"],
-    )
-    class_probabilities: dict[str, float] = Field(
-        description="Probability for each class. Keys are the label strings, values sum to 1.0.",
-        examples=[{"fake": 0.73, "real": 0.27}],
-    )
-    confidence: float = Field(
-        description="Probability of the winning class, same as max(class_probabilities). Between 0 and 1.",
-        examples=[0.73],
-    )
-    is_low_confidence: bool = Field(
-        description="True when confidence is below 0.60. Don't trust the result too much in that case.",
-        examples=[False],
-    )
-    cleaned_statement: str = Field(
-        description="The statement after server-side preprocessing. Useful for debugging if the prediction looks wrong.",
-        examples=["economy grow last quarter administration"],
-    )
-
 v1 = APIRouter(prefix="/v1")
 
 
-@v1.get("/health", tags=["test"])
-def health():
-    """
-    Check if the API is up and the model loaded correctly.
-
-    Returns:
-    - **status** - always `"ok, api is running"` if the server is reachable
-    - **model_loaded** - `true` if the model file was found and loaded on startup
-    - **model_path** - the path it looked for the model at
-    """
+@v1.get("/health", tags=["health"])
+def health_v1():
+    """Check if the API and v1 baseline model are loaded."""
     return {
         "status": "ok, api is running",
         "model_loaded": model_bundle is not None,
@@ -225,32 +258,12 @@ def health():
     }
 
 
-@v1.post("/predictions", tags=["prediction"], status_code=201, response_model=PredictionResponse)
-def predict(payload: PredictRequest):
+@v1.post("/predictions", tags=["v1 - baseline"], status_code=201, response_model=PredictionResponse)
+def predict_v1(payload: V1PredictRequest):
     """
-    Classify a political statement as **real** or **fake**.
+    Classify a statement using the TF-IDF + Logistic Regression baseline.
 
-    Send a statement plus any speaker metadata you have. The server handles all
-    the text preprocessing so you don't need to clean it yourself.
-
-    **Required:**
-    - `statement` - the claim to classify (1-5000 characters)
-
-    **Optional metadata** (helps accuracy if you have it):
-    - `subjects` - comma-separated topic tags (e.g. `"economy,jobs"`)
-    - `party` - speaker's party, case-insensitive (e.g. `"republican"`)
-    - `state` - U.S. state of the speaker (e.g. `"Texas"`)
-    - `speaker_job` - their job title at the time (e.g. `"President"`)
-    - `hist1`-`hist5` - how many times the speaker was previously rated:
-      barely-true, false, half-true, mostly-true, pants-fire
-
-    **Returns** a `PredictionResponse` with the label, per-class probabilities,
-    confidence score, and a flag if confidence is low.
-
-    **Errors:**
-    - `422` - bad input (blank statement, negative history count, etc.)
-    - `503` - model not loaded on the server
-    - `500` - something went wrong during inference
+    Uses TF-IDF text features + speaker metadata including history counts.
     """
     if model_bundle is None:
         raise HTTPException(
@@ -319,4 +332,142 @@ def predict(payload: PredictRequest):
     }
 
 
+# ===================================================================
+#  V2 — BERT + Metadata Fusion
+# ===================================================================
+
+class V2PredictRequest(BaseModel):
+    """
+    Input for the BERT + metadata fusion model.
+
+    Only `statement` is required. Speaker metadata helps accuracy.
+    No history counts — this model does not use speaker history.
+    """
+
+    statement: str = Field(
+        ...,
+        min_length=1,
+        max_length=5000,
+        description="The raw political statement or claim to classify.",
+        examples=["The economy grew by 3% last quarter under my administration."],
+    )
+    subjects: str = Field(default="", description="Comma-separated topic tags.", examples=["economy,jobs"])
+    speaker: str = Field(default="unknown", description="Speaker name.", examples=["barack-obama"])
+    party: str = Field(default="unknown", description="Political party.", examples=["republican"])
+    state: str = Field(default="unknown", description="U.S. state.", examples=["Texas"])
+    speaker_job: str = Field(default="unknown", description="Job title.", examples=["President"])
+    context: str = Field(default="unknown", description="Context of the statement.", examples=["a speech"])
+
+    @field_validator("statement")
+    @classmethod
+    def statement_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Statement must not be blank or whitespace only.")
+        return v
+
+    @field_validator("party", "state", "speaker_job", "subjects", "speaker", "context")
+    @classmethod
+    def strip_whitespace(cls, v: str) -> str:
+        return v.strip()
+
+
+v2 = APIRouter(prefix="/v2")
+
+
+@v2.get("/health", tags=["health"])
+def health_v2():
+    """Check if the API and v2 BERT model are loaded."""
+    return {
+        "status": "ok, api is running",
+        "bert_model_loaded": bert_bundle is not None,
+        "model_dir": str(BERT_MODEL_DIR),
+    }
+
+
+@v2.post("/predictions", tags=["v2 - bert"], status_code=201, response_model=PredictionResponse)
+def predict_v2(payload: V2PredictRequest):
+    """
+    Classify a statement using the BERT + metadata fusion model.
+
+    Uses BERT text embeddings fused with speaker metadata (no history features).
+    """
+    if bert_bundle is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "BERT model not found. Train and serialize first by running "
+                "fake_news_detection/scripts/bert_text_metadata.py"
+            ),
+        )
+
+    import torch
+
+    model = bert_bundle["model"]
+    tokenizer = bert_bundle["tokenizer"]
+    meta_transformers = bert_bundle["meta_transformers"]
+    cfg = bert_bundle["config"]
+    device = bert_bundle["device"]
+
+    frame = pd.DataFrame([{
+        "statement": payload.statement.strip(),
+        "subjects": payload.subjects,
+        "speaker": payload.speaker,
+        "party": payload.party,
+        "state": payload.state,
+        "speaker_job": payload.speaker_job,
+        "context": payload.context,
+    }])
+
+    try:
+        metadata = meta_transformers.transform(frame)
+        metadata_tensor = torch.tensor(metadata, dtype=torch.float32).to(device)
+
+        enc = tokenizer(
+            payload.statement.strip(),
+            truncation=True,
+            padding="max_length",
+            max_length=cfg["max_length"],
+            return_tensors="pt",
+        )
+        input_ids = enc["input_ids"].to(device)
+        attention_mask = enc["attention_mask"].to(device)
+        token_type_ids = enc.get(
+            "token_type_ids",
+            torch.zeros_like(enc["input_ids"]),
+        ).to(device)
+
+        with torch.no_grad():
+            logits = model(input_ids, attention_mask, token_type_ids, metadata_tensor)
+            probs = torch.softmax(logits, dim=-1).cpu().numpy()[0]
+
+        predicted_id = int(np.argmax(probs))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"BERT prediction failed: {exc}",
+        ) from exc
+
+    if label_encoder is not None:
+        predicted_label = str(label_encoder.inverse_transform([predicted_id])[0])
+        classes = [str(c) for c in label_encoder.classes_]
+    else:
+        classes = [str(i) for i in range(cfg["num_labels"])]
+        predicted_label = classes[predicted_id]
+
+    class_probabilities = {
+        classes[i]: float(probs[i]) for i in range(len(classes))
+    }
+    confidence = max(class_probabilities.values()) if class_probabilities else 0.0
+
+    return {
+        "label": predicted_label,
+        "class_probabilities": class_probabilities,
+        "confidence": confidence,
+        "is_low_confidence": confidence < 0.60,
+        "cleaned_statement": payload.statement.strip(),
+    }
+
+
 app.include_router(v1)
+app.include_router(v2)
