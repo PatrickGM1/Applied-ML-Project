@@ -79,8 +79,16 @@ if (BERT_MODEL_DIR / "serving_config.json").exists():
 
     _bert_tokenizer = AutoTokenizer.from_pretrained(str(BERT_MODEL_DIR))
 
+    from fake_news_detection.scripts.bert_text_metadata import MetadataTransformers as _MT  # noqa: F811
+
+    class _RemapUnpickler(pickle.Unpickler):
+        def find_class(self, module, name):
+            if module == "__main__" and name == "MetadataTransformers":
+                return _MT
+            return super().find_class(module, name)
+
     with open(BERT_MODEL_DIR / "meta_transformers.pkl", "rb") as _fh:
-        _bert_meta_transformers = pickle.load(_fh)
+        _bert_meta_transformers = _RemapUnpickler(_fh).load()
 
     _bert_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     _bert_model.to(_bert_device)
@@ -417,6 +425,11 @@ def predict_v2(payload: V2PredictRequest):
         "state": payload.state,
         "speaker_job": payload.speaker_job,
         "context": payload.context,
+        "hist1": 0.0,
+        "hist2": 0.0,
+        "hist3": 0.0,
+        "hist4": 0.0,
+        "hist5": 0.0,
     }])
 
     try:
