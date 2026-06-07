@@ -40,6 +40,26 @@ Stop with `Ctrl+C`, then `docker compose down`.
 
 ---
 
+### Training the models
+
+The trained model weights are **not included in the repository** (the BERT model alone is >400 MB and we are out of Git LFS credits). You must run the training scripts to generate them before starting the API:
+
+```bash
+# 1. Train the TF-IDF baseline (v1) — takes ~30 seconds
+python -m fake_news_detection.scripts.final_text_metadata_test
+
+# 2. Train the BERT + metadata fusion model (v2) — takes ~30-60 min on GPU
+python -m fake_news_detection.scripts.bert_text_metadata
+```
+
+This produces:
+- `fake_news_detection/artifacts/models/binary_text_metadata_final.joblib` (v1)
+- `fake_news_detection/artifacts/models/bert_text_metadata/binary_bert_metadata/` (v2 — weights, tokenizer, config)
+
+Without these files the API starts but returns `503 Service Unavailable` on prediction endpoints.
+
+---
+
 ### Without Docker
 
 **Prerequisites:** Python 3.11+
