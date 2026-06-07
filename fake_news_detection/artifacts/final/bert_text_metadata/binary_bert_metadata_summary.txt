@@ -7,10 +7,10 @@ meta_dim: 6424
 max_length: 128
 train_rows: 6489
 eval_rows: 802
-accuracy: 0.6883
-f1_macro: 0.6760
-f1_weighted: 0.6853
+accuracy: 0.6870
+f1_macro: 0.6698
+f1_weighted: 0.6809
 labels: 0, 1
 
 confusion_matrix:
-[[198, 144], [106, 354]]
+[[184, 158], [93, 367]]
