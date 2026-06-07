@@ -1,10 +1,5 @@
 {
   "dataset": "binary_bert_text_only",
-  "model_name": "bert-base-uncased",
-  "text_column": "statement",
-  "label_column": "label2_int",
-  "num_labels": 2,
-  "max_length": 128,
   "train_rows": 6489,
   "eval_rows": 802,
   "accuracy": 0.6807980049875312,

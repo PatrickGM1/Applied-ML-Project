@@ -1,9 +1,4 @@
 dataset: multiclass_bert_text_only
-model_name: bert-base-uncased
-text_column: statement
-label_column: label6_int
-num_labels: 6
-max_length: 128
 train_rows: 10269
 eval_rows: 1283
 accuracy: 0.2728

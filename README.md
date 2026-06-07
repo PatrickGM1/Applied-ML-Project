@@ -40,6 +40,26 @@ Stop with `Ctrl+C`, then `docker compose down`.
 
 ---
 
+### Training the models
+
+The trained model weights are **not included in the repository** (the BERT model alone is >400 MB and we are out of Git LFS credits). You must run the training scripts to generate them before starting the API:
+
+```bash
+# 1. Train the TF-IDF baseline (v1) — takes ~30 seconds
+python -m fake_news_detection.scripts.final_text_metadata_test
+
+# 2. Train the BERT + metadata fusion model (v2) — takes ~30-60 min on GPU
+python -m fake_news_detection.scripts.bert_text_metadata
+```
+
+This produces:
+- `fake_news_detection/artifacts/models/binary_text_metadata_final.joblib` (v1)
+- `fake_news_detection/artifacts/models/bert_text_metadata/binary_bert_metadata/` (v2 — weights, tokenizer, config)
+
+Without these files the API starts but returns `503 Service Unavailable` on prediction endpoints.
+
+---
+
 ### Without Docker
 
 **Prerequisites:** Python 3.11+
@@ -178,3 +198,155 @@ All text preprocessing is done server-side so just send the raw statement as-is.
 | `500 Internal Server Error` | Unexpected inference error                                                                |
 
 ---
+
+### `GET /v2/health`
+
+Check whether the API is reachable and the BERT model is loaded.
+
+**Response `200 OK`**
+
+```json
+{
+  "status": "ok, api is running",
+  "bert_model_loaded": true,
+  "model_dir": "/app/fake_news_detection/artifacts/models/bert_text_metadata/binary_bert_metadata"
+}
+```
+
+---
+
+### `POST /v2/predictions`
+
+Classify a political statement as **real** or **fake** using the BERT + Metadata Fusion model.
+
+This model uses a fine-tuned BERT encoder for text representation, fused with categorical speaker metadata. It does **not** use speaker history counts.
+
+#### Request body (`application/json`)
+
+| Field         | Type     | Required | Default     | Description                                            |
+| ------------- | -------- | -------- | ----------- | ------------------------------------------------------ |
+| `statement`   | `string` | yes      | -           | The political claim to classify (1-5000 chars)         |
+| `subjects`    | `string` |          | `""`        | Comma-separated topic tags, e.g. `"economy,jobs"`      |
+| `speaker`     | `string` |          | `"unknown"` | Speaker name, e.g. `"barack-obama"`                    |
+| `party`       | `string` |          | `"unknown"` | Speaker's party affiliation, e.g. `"republican"`       |
+| `state`       | `string` |          | `"unknown"` | U.S. state of the speaker, e.g. `"Texas"`              |
+| `speaker_job` | `string` |          | `"unknown"` | Job title, e.g. `"President"`                          |
+| `context`     | `string` |          | `"unknown"` | Context of the statement, e.g. `"a speech"`            |
+
+**Minimal example request:**
+
+```json
+{
+  "statement": "The economy grew by 3% last quarter under my administration."
+}
+```
+
+**Full example request:**
+
+```json
+{
+  "statement": "The economy grew by 3% last quarter under my administration.",
+  "subjects": "economy,jobs",
+  "speaker": "barack-obama",
+  "party": "democrat",
+  "state": "Illinois",
+  "speaker_job": "President",
+  "context": "a speech"
+}
+```
+
+#### Response `201 Created`
+
+Same schema as v1:
+
+```json
+{
+  "label": "real",
+  "class_probabilities": {
+    "fake": 0.33,
+    "real": 0.67
+  },
+  "confidence": 0.67,
+  "is_low_confidence": false,
+  "cleaned_statement": "The economy grew by 3% last quarter under my administration."
+}
+```
+
+#### Error responses
+
+| Status                      | Cause                                                        |
+| --------------------------- | ------------------------------------------------------------ |
+| `422 Unprocessable Entity`  | Validation failed: blank statement, statement > 5000 chars   |
+| `503 Service Unavailable`   | BERT model not found, run the training script first          |
+| `500 Internal Server Error` | Unexpected inference error                                   |
+
+---
+
+## Models
+
+| Version | Model                        | Features                              | Accuracy |
+| ------- | ---------------------------- | ------------------------------------- | -------- |
+| v1      | TF-IDF + Logistic Regression | Text + metadata + speaker history     | Baseline |
+| v2      | BERT + Metadata Fusion       | BERT text encoder + metadata (no history) | Final    |
+
+---
+
+## Testing
+
+Tests use [pytest](https://docs.pytest.org/) with FastAPI's `TestClient`.
+
+```bash
+# Install pytest (if not already)
+pip install pytest
+
+# Run all tests
+pytest tests/ -v
+```
+
+Tests cover: health endpoints, input validation, 503 without models, mocked predictions, response schema, and OpenAPI registration.
+
+---
+
+## CI/CD
+
+GitHub Actions pipeline (`.github/workflows/deploy.yml`):
+
+1. **Test** - runs `pytest tests/ -v` on Python 3.11
+2. **Deploy** - only runs if tests pass; SSHs into VPS, pulls latest code, rebuilds Docker containers
+
+---
+
+## Project structure
+
+```
+Applied-ML-Project/
+├── main.py                          # FastAPI app (v1 + v2 endpoints)
+├── streamlit_app.py                 # Streamlit frontend entry point
+├── pages/
+│   ├── home.py                      # Home page
+│   ├── predict.py                   # Base model (v1) demo
+│   └── final.py                     # BERT model (v2) demo
+├── fake_news_detection/
+│   ├── scripts/
+│   │   ├── nlp_script.py            # Text preprocessing
+│   │   ├── final_text_metadata_test.py  # TF-IDF training script
+│   │   ├── bert_text_metadata.py    # BERT training script
+│   │   ├── compare_bert_vs_baseline_no_history.py
+│   │   └── plot_training_history.py
+│   ├── features/
+│   │   └── metadata.py              # Metadata feature engineering
+│   ├── artifacts/
+│   │   ├── models/                  # Trained model weights
+│   │   └── encoders/                # Label encoders
+│   └── data/
+│       └── processed/               # Cleaned CSV data
+├── tests/
+│   └── test_main.py                 # API tests (pytest)
+├── .github/workflows/
+│   └── deploy.yml                   # CI/CD pipeline
+├── Dockerfile                       # Backend (FastAPI)
+├── Dockerfile.streamlit             # Frontend (Streamlit)
+├── docker-compose.yml               # Multi-container setup
+├── .streamlit/config.toml           # Streamlit theme config
+└── requirements.txt
+```

@@ -1,0 +1,10 @@
+dataset: multiclass_tfidf_meta_no_hist
+train_rows: 10269
+eval_rows: 1283
+accuracy: 0.2447
+f1_macro: 0.2353
+f1_weighted: 0.2410
+labels: 0, 1, 2, 3, 4, 5
+
+confusion_matrix:
+[[30, 55, 51, 39, 10, 29], [31, 75, 53, 40, 13, 38], [48, 48, 63, 65, 4, 39], [25, 36, 56, 81, 2, 49], [14, 30, 20, 9, 14, 5], [10, 43, 49, 55, 3, 51]]
