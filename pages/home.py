@@ -48,11 +48,11 @@ with col1:
 with col2:
     st.markdown(
         """
-        <div style="background:#141414; border:1px solid #7c6af7; border-radius:10px;
+        <div style="background:#141414; border:1px solid #deff9a; border-radius:10px;
                     padding:1.2rem 1.3rem;
-                    box-shadow:0 0 20px rgba(124,106,247,0.06);">
+                    box-shadow:0 0 20px rgba(222,255,154,0.06);">
             <div style="font-size:0.6rem; font-weight:600; text-transform:uppercase;
-                        letter-spacing:0.08em; color:#7c6af7; margin-bottom:0.5rem;">v2 · Final Model</div>
+                        letter-spacing:0.08em; color:#deff9a; margin-bottom:0.5rem;">v2 · Final Model</div>
             <div style="font-size:0.95rem; font-weight:600; color:#e8e8e8; margin-bottom:0.3rem;">
                 BERT + Metadata Fusion
             </div>

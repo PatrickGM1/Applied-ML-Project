@@ -16,14 +16,14 @@ st.markdown(
         --surface: #141414;
         --surface-2: #1a1a1a;
         --border: #222;
-        --border-hover: #7c6af7;
+        --border-hover: #deff9a;
         --text: #e8e8e8;
         --text-dim: #aaa;
         --muted: #666;
-        --accent: #7c6af7;
-        --accent-dim: rgba(124, 106, 247, 0.10);
-        --accent-mid: rgba(124, 106, 247, 0.20);
-        --accent-glow: rgba(124, 106, 247, 0.35);
+        --accent: #deff9a;
+        --accent-dim: rgba(222, 255, 154, 0.10);
+        --accent-mid: rgba(222, 255, 154, 0.20);
+        --accent-glow: rgba(222, 255, 154, 0.35);
         --radius: 10px;
         --radius-sm: 6px;
     }
@@ -57,7 +57,7 @@ st.markdown(
 
     /* ── Links ── */
     a { color: var(--accent) !important; text-decoration: none !important; transition: color .15s; }
-    a:hover { color: #9d90fa !important; }
+    a:hover { color: #efffc4 !important; }
 
     /* ── Dividers ── */
     hr {
