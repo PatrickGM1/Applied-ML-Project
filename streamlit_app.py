@@ -250,6 +250,19 @@ st.markdown(
     }
     .conf-ring svg { filter: drop-shadow(0 0 6px var(--accent-dim)); }
 
+    /* ── Metric deltas ── */
+    [data-testid="stMetricDelta"] {
+        color: #deff9a !important;
+    }
+    [data-testid="stMetricDelta"] svg {
+        fill: #deff9a !important;
+    }
+
+    /* ── Dataframe ── */
+    [data-testid="stDataFrame"] iframe {
+        color-scheme: dark;
+    }
+
     /* ── Section headers ── */
     .section-label {
         color: var(--muted);
