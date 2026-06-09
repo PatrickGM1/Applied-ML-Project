@@ -11,6 +11,7 @@
 
     Fake News Detection using the LIAR dataset.
     Dataset: https://www.kaggle.com/datasets/doanquanvietnamca/liar-dataset
+    Generalization dataset: https://github.com/chengxuphd/liar2
 
 ## Website for deployment:
 
@@ -284,10 +285,12 @@ Same schema as v1:
 
 ## Models
 
-| Version | Model                        | Features                              | Accuracy |
-| ------- | ---------------------------- | ------------------------------------- | -------- |
-| v1      | TF-IDF + Logistic Regression | Text + metadata + speaker history     | Baseline |
-| v2      | BERT + Metadata Fusion       | BERT text encoder + metadata (no history) | Final    |
+| Version | Model                        | Features                              | LIAR Accuracy | LIAR2 Accuracy |
+| ------- | ---------------------------- | ------------------------------------- | ------------- | -------------- |
+| v1      | TF-IDF + Logistic Regression | Text + metadata + speaker history     | 68.70%        | —              |
+| v2      | BERT + Metadata Fusion       | BERT text encoder + metadata (no history) | 68.83%    | 80.06%         |
+
+The BERT model was also evaluated on [LIAR2](https://github.com/chengxuphd/liar2) (1,565 test samples) **without retraining**, achieving 80.06% accuracy — strong cross-dataset generalization.
 
 ---
 
@@ -325,7 +328,8 @@ Applied-ML-Project/
 ├── pages/
 │   ├── home.py                      # Home page
 │   ├── predict.py                   # Base model (v1) demo
-│   └── final.py                     # BERT model (v2) demo
+│   ├── final.py                     # BERT model (v2) demo
+│   └── results.py                   # LIAR & LIAR2 evaluation results
 ├── fake_news_detection/
 │   ├── scripts/
 │   │   ├── nlp_script.py            # Text preprocessing
