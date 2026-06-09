@@ -127,11 +127,11 @@ st.markdown("---")
 st.markdown('<div class="section-label">Key Findings</div>', unsafe_allow_html=True)
 st.markdown(
     """
-    - **80% accuracy on LIAR2** without retraining — strong cross-dataset generalization
-    - Performance **higher on LIAR2 than LIAR** (80.06% vs 68.83%), likely due to cleaner examples
-    - BERT + metadata slightly beats TF-IDF + history (68.83% vs 68.70%), but TF-IDF uses speaker history — an unfair advantage
-    - On equal features (no history), BERT wins by a bigger margin (68.83% vs 66.33%)
-    - 6-way multiclass remains very hard (~31% best) — consistent with published LIAR benchmarks
+    - The BERT model achieves **80% accuracy on LIAR2** without any retraining, which suggests good cross-dataset generalization
+    - Performance is actually higher on LIAR2 than on LIAR (80.06% vs 68.83%), probably because LIAR2 has cleaner and more separable examples
+    - BERT + metadata slightly beats TF-IDF + history (68.83% vs 68.70%), but TF-IDF has access to speaker history counts, which gives it an unfair advantage
+    - When both models use the same features (no history), BERT wins by a bigger margin (68.83% vs 66.33%)
+    - 6-way multiclass is much harder for all models (~31% accuracy at best), which is consistent with published benchmarks on LIAR
     """,
 )
 
